@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ranger-sdk"
+version = "0.1.0"
+description = "Typed Apache Ranger client (Admin, KMS, PDP) with HA, pluggable auth and policy-as-code"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "Apache-2.0" }
+dependencies = [
+    "httpx>=0.24,<1",
+    "pydantic>=2.4,<3",
+    "pyyaml>=6",
+]
+
+[project.optional-dependencies]
+kerberos = ["gssapi>=1.8"]
+cli = ["typer>=0.9"]
+otel = ["opentelemetry-api>=1.20"]
+dev = ["pytest>=7", "pytest-asyncio>=0.21", "respx>=0.20", "typer>=0.9", "opentelemetry-sdk>=1.20"]
+
+[project.scripts]
+rangerctl = "ranger_sdk.cli.main:run"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+ranger_sdk = ["py.typed", "features.yaml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"

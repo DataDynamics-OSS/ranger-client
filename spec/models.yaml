@@ -1,0 +1,461 @@
+# Wire models shared by both SDKs.
+#
+# * Java model classes are generated from this file:  tools/gen_java_models.py
+# * The Python (Pydantic) models are checked against it: python/tests/test_spec_models.py
+#
+# Field names are the server's JSON names. Types: String, Long, Integer, Boolean,
+# Object, List<T>, Map<String, T>, Enum<E> (open enum, unknown values kept) and model names.
+# `base: true` adds the RangerBaseModelObject fields (id, guid, isEnabled, ...).
+# `python:` names the Pydantic class; `java_extra:` points at hand-written
+# convenience code merged into the generated class (tools/java_extra/<file>).
+
+base_fields:
+  id: Long
+  guid: String
+  isEnabled: Boolean
+  createdBy: String
+  updatedBy: String
+  createTime: Object
+  updateTime: Object
+  version: Long
+
+models:
+  # ------------------------------------------------------------------ admin
+  RangerServiceDef:
+    python: ServiceDef
+    base: true
+    fields:
+      name: String
+      displayName: String
+      implClass: String
+      label: String
+      description: String
+      options: Map<String, String>
+      configs: List<Map<String, Object>>
+      resources: List<Map<String, Object>>
+      accessTypes: List<Map<String, Object>>
+      policyConditions: List<Map<String, Object>>
+      contextEnrichers: List<Map<String, Object>>
+      enums: List<Map<String, Object>>
+      dataMaskDef: Map<String, Object>
+      rowFilterDef: Map<String, Object>
+
+  RangerService:
+    python: Service
+    base: true
+    fields:
+      type: String
+      name: String
+      displayName: String
+      description: String
+      tagService: String
+      configs: Map<String, String>
+      policyVersion: Long
+      policyUpdateTime: Object
+      tagVersion: Long
+      tagUpdateTime: Object
+
+  PolicyResource:
+    python: PolicyResource
+    java_extra: PolicyResource.java
+    fields:
+      values: List<String>
+      isExcludes: Boolean
+      isRecursive: Boolean
+
+  PolicyItemAccess:
+    python: PolicyItemAccess
+    java_extra: PolicyItemAccess.java
+    fields:
+      type: String
+      isAllowed: Boolean
+
+  PolicyItemCondition:
+    python: PolicyItemCondition
+    fields:
+      type: String
+      values: List<String>
+
+  PolicyItem:
+    python: PolicyItem
+    java_extra: PolicyItem.java
+    fields:
+      accesses: List<PolicyItemAccess>
+      users: List<String>
+      groups: List<String>
+      roles: List<String>
+      conditions: List<PolicyItemCondition>
+      delegateAdmin: Boolean
+
+  DataMaskInfo:
+    python: DataMaskInfo
+    fields:
+      dataMaskType: String
+      conditionExpr: String
+      valueExpr: String
+
+  DataMaskPolicyItem:
+    python: DataMaskPolicyItem
+    fields:
+      accesses: List<PolicyItemAccess>
+      users: List<String>
+      groups: List<String>
+      roles: List<String>
+      conditions: List<PolicyItemCondition>
+      delegateAdmin: Boolean
+      dataMaskInfo: DataMaskInfo
+
+  RowFilterInfo:
+    python: RowFilterInfo
+    fields:
+      filterExpr: String
+
+  RowFilterPolicyItem:
+    python: RowFilterPolicyItem
+    fields:
+      accesses: List<PolicyItemAccess>
+      users: List<String>
+      groups: List<String>
+      roles: List<String>
+      conditions: List<PolicyItemCondition>
+      delegateAdmin: Boolean
+      rowFilterInfo: RowFilterInfo
+
+  RangerPolicy:
+    python: Policy
+    base: true
+    java_extra: RangerPolicy.java
+    fields:
+      service: String
+      name: String
+      policyType: Integer
+      policyPriority: Integer
+      description: String
+      resourceSignature: String
+      isAuditEnabled: Boolean
+      resources: Map<String, PolicyResource>
+      additionalResources: List<Map<String, PolicyResource>>
+      conditions: List<PolicyItemCondition>
+      policyItems: List<PolicyItem>
+      denyPolicyItems: List<PolicyItem>
+      allowExceptions: List<PolicyItem>
+      denyExceptions: List<PolicyItem>
+      dataMaskPolicyItems: List<DataMaskPolicyItem>
+      rowFilterPolicyItems: List<RowFilterPolicyItem>
+      serviceType: String
+      options: Map<String, Object>
+      validitySchedules: List<Map<String, Object>>
+      policyLabels: List<String>
+      zoneName: String
+      isDenyAllElse: Boolean
+
+  RoleMember:
+    python: RoleMember
+    java_extra: RoleMember.java
+    fields:
+      name: String
+      isAdmin: Boolean
+
+  RangerRole:
+    python: Role
+    base: true
+    fields:
+      name: String
+      description: String
+      options: Map<String, Object>
+      users: List<RoleMember>
+      groups: List<RoleMember>
+      roles: List<RoleMember>
+      createdByUser: String
+
+  GrantRevokeRoleRequest:
+    python: GrantRevokeRoleRequest
+    fields:
+      grantor: String
+      grantorGroups: List<String>
+      targetRoles: List<String>
+      users: List<String>
+      groups: List<String>
+      roles: List<String>
+      grantOption: Boolean
+      clientIPAddress: String
+      clientType: String
+      requestData: String
+      sessionId: String
+      clusterName: String
+
+  ZoneServiceResource:
+    python: ZoneServiceResource
+    fields:
+      id: Long
+      resource: Map<String, List<String>>
+
+  ZoneService:
+    python: ZoneService
+    fields:
+      resources: List<ZoneServiceResource>
+
+  RangerPrincipal:
+    python: Principal
+    fields:
+      type: String
+      name: String
+
+  RangerSecurityZone:
+    python: SecurityZone
+    base: true
+    fields:
+      name: String
+      description: String
+      services: Map<String, ZoneService>
+      tagServices: List<String>
+      admins: List<RangerPrincipal>
+      auditors: List<RangerPrincipal>
+
+  SecurityZoneChangeRequest:
+    python: SecurityZoneChangeRequest
+    fields:
+      name: String
+      description: String
+      resourcesToUpdate: Map<String, ZoneService>
+      resourcesToRemove: Map<String, ZoneService>
+      tagServicesToAdd: List<String>
+      tagServicesToRemove: List<String>
+      adminsToAdd: List<RangerPrincipal>
+      adminsToRemove: List<RangerPrincipal>
+      auditorsToAdd: List<RangerPrincipal>
+      auditorsToRemove: List<RangerPrincipal>
+
+  RangerUser:
+    python: User
+    secret: [password]
+    fields:
+      id: Long
+      name: String
+      firstName: String
+      lastName: String
+      emailAddress: String
+      password: String
+      description: String
+      groupIdList: List<Long>
+      groupNameList: List<String>
+      status: Integer
+      isVisible: Integer
+      userSource: Integer
+      userRoleList: List<String>
+      otherAttributes: String
+      syncSource: String
+
+  RangerGroup:
+    python: Group
+    fields:
+      id: Long
+      name: String
+      description: String
+      groupType: Integer
+      groupSource: Integer
+      isVisible: Integer
+      otherAttributes: String
+      syncSource: String
+
+  RangerGroupUser:
+    python: GroupUser
+    fields:
+      id: Long
+      name: String
+      parentGroupId: Long
+      userId: Long
+
+  TagAttributeDef:
+    python: TagAttributeDef
+    fields:
+      name: String
+      type: String
+
+  RangerTagDef:
+    python: TagDef
+    base: true
+    fields:
+      name: String
+      source: String
+      attributeDefs: List<TagAttributeDef>
+
+  RangerTag:
+    python: Tag
+    base: true
+    fields:
+      type: String
+      owner: Integer
+      attributes: Map<String, String>
+      options: Map<String, Object>
+      validityPeriods: List<Map<String, Object>>
+
+  RangerServiceResource:
+    python: ServiceResource
+    base: true
+    fields:
+      serviceName: String
+      resourceElements: Map<String, PolicyResource>
+      resourceSignature: String
+      ownerUser: String
+      additionalInfo: Map<String, String>
+
+  RangerTagResourceMap:
+    python: TagResourceMap
+    base: true
+    fields:
+      tagId: Long
+      resourceId: Long
+
+  # ------------------------------------------------------------------ kms
+  KeyMetadata:
+    python: KeyMetadata
+    fields:
+      name: String
+      cipher: String
+      length: Integer
+      description: String
+      attributes: Map<String, Object>
+      created: Long
+      versions: Integer
+
+  KeyVersion:
+    python: KeyVersion
+    secret: [material]
+    fields:
+      name: String
+      versionName: String
+      material: String
+
+  EncryptedKeyVersion:
+    python: EncryptedKeyVersion
+    fields:
+      versionName: String
+      iv: String
+      encryptedKeyVersion: KeyVersion
+
+  # ------------------------------------------------------------------ pdp (/authz/v1)
+  UserInfo:
+    python: UserInfo
+    fields:
+      name: String
+      attributes: Map<String, Object>
+      groups: List<String>
+      roles: List<String>
+
+  ResourceInfo:
+    python: ResourceInfo
+    java_extra: ResourceInfo.java
+    fields:
+      name: String
+      subResources: List<String>
+      nameMatchScope: Enum<MatchScope>
+      attributes: Map<String, Object>
+
+  AccessInfo:
+    python: AccessInfo
+    fields:
+      resource: ResourceInfo
+      action: String
+      permissions: List<String>
+
+  AccessContext:
+    python: AccessContext
+    fields:
+      serviceType: String
+      serviceName: String
+      accessTime: Long
+      clientIpAddress: String
+      forwardedIpAddresses: List<String>
+      additionalInfo: Map<String, Object>
+
+  AuthzRequest:
+    python: AuthzRequest
+    fields:
+      requestId: String
+      user: UserInfo
+      access: AccessInfo
+      context: AccessContext
+
+  MultiAuthzRequest:
+    python: MultiAuthzRequest
+    fields:
+      requestId: String
+      user: UserInfo
+      accesses: List<AccessInfo>
+      context: AccessContext
+
+  ResourcePermissionsRequest:
+    python: ResourcePermissionsRequest
+    fields:
+      requestId: String
+      resource: ResourceInfo
+      context: AccessContext
+
+  PolicyInfo:
+    python: PolicyInfo
+    fields:
+      id: Long
+      version: Long
+
+  AccessResult:
+    python: AccessResult
+    java_extra: HasDecision.java
+    fields:
+      decision: Enum<Decision>
+      policy: PolicyInfo
+
+  DataMaskResult:
+    python: DataMaskResult
+    fields:
+      maskType: String
+      maskedValue: String
+      policy: PolicyInfo
+
+  RowFilterResult:
+    python: RowFilterResult
+    fields:
+      filterExpr: String
+      policy: PolicyInfo
+
+  ResultInfo:
+    python: ResultInfo
+    fields:
+      access: AccessResult
+      dataMask: DataMaskResult
+      rowFilter: RowFilterResult
+      additionalInfo: Map<String, Object>
+
+  PermissionResult:
+    python: PermissionResult
+    fields:
+      permission: String
+      access: AccessResult
+      dataMask: DataMaskResult
+      rowFilter: RowFilterResult
+      additionalInfo: Map<String, Object>
+      subResources: Map<String, ResultInfo>
+
+  AuthzResult:
+    python: AuthzResult
+    java_extra: HasDecision.java
+    fields:
+      requestId: String
+      decision: Enum<Decision>
+      permissions: Map<String, PermissionResult>
+
+  MultiAuthzResult:
+    python: MultiAuthzResult
+    java_extra: HasDecision.java
+    fields:
+      requestId: String
+      decision: Enum<Decision>
+      accesses: List<AuthzResult>
+
+  ResourcePermissions:
+    python: ResourcePermissions
+    fields:
+      resource: ResourceInfo
+      users: Map<String, Map<String, PermissionResult>>
+      groups: Map<String, Map<String, PermissionResult>>
+      roles: Map<String, Map<String, PermissionResult>>

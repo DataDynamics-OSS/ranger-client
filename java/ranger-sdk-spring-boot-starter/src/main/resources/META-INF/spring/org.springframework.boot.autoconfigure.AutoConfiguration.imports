@@ -1,0 +1,4 @@
+io.datadynamics.ranger.client.spring.RangerAutoConfiguration
+io.datadynamics.ranger.client.spring.RangerHealthAutoConfiguration
+io.datadynamics.ranger.client.spring.RangerMetricsAutoConfiguration
+io.datadynamics.ranger.client.spring.RangerTracingAutoConfiguration

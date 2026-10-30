@@ -1,0 +1,107 @@
+# Policy-as-code contract: both SDKs must produce the same plan for each case.
+#
+# server: policies already on the server (wire JSON)
+# spec:   a spec document (the YAML users write)
+# expect: plan summary, and the pending changes as [action, name, [changed fields...]]
+cases:
+  - name: create everything on an empty server
+    server: []
+    spec:
+      service: cm_hive
+      policies:
+        - name: sales_read
+          resources: {database: sales, table: "*"}
+          allow: [{groups: [analyst], accesses: [select]}]
+    expect:
+      summary: {create: 1, update: 0, delete: 0, noop: 0}
+      changes: [[create, sales_read]]
+
+  - name: defaults, ordering and server bookkeeping do not cause a diff
+    server:
+      - {id: 1, guid: g1, version: 4, service: cm_hive, name: p, isEnabled: true, isAuditEnabled: true,
+         policyType: 0, policyPriority: 0, isDenyAllElse: false, serviceType: hive, resourceSignature: sig,
+         createTime: 1700000000000, updatedBy: admin, description: "",
+         resources: {database: {values: [b, a], isExcludes: false, isRecursive: false}},
+         policyItems: [{users: [u2, u1], delegateAdmin: false,
+                        accesses: [{type: update, isAllowed: true}, {type: select, isAllowed: true}]}]}
+    spec:
+      service: cm_hive
+      policies:
+        - name: p
+          resources: {database: [a, b]}
+          allow: [{users: [u1, u2], accesses: [select, update]}]
+    expect:
+      summary: {create: 0, update: 0, delete: 0, noop: 1}
+      changes: []
+
+  - name: changed accesses and description are reported per field
+    server:
+      - {id: 1, version: 1, service: cm_hive, name: p, description: old,
+         resources: {database: {values: [sales]}},
+         policyItems: [{groups: [g], accesses: [{type: select, isAllowed: true}, {type: update, isAllowed: true}]}]}
+    spec:
+      service: cm_hive
+      policies:
+        - name: p
+          description: new
+          resources: {database: sales}
+          allow: [{groups: [g], accesses: [select]}]
+    expect:
+      summary: {create: 0, update: 1, delete: 0, noop: 0}
+      changes: [[update, p, [description, policyItems]]]
+
+  - name: disabling a policy is a diff
+    server:
+      - {id: 1, version: 1, service: cm_hive, name: p, isEnabled: true, resources: {database: {values: [x]}}}
+    spec:
+      service: cm_hive
+      policies:
+        - {name: p, enabled: false, resources: {database: x}}
+    expect:
+      summary: {create: 0, update: 1, delete: 0, noop: 0}
+      changes: [[update, p, [isEnabled]]]
+
+  - name: prune deletes only policies carrying the managed label
+    server:
+      - {id: 1, version: 1, service: cm_hive, name: manual, resources: {}}
+      - {id: 2, version: 1, service: cm_hive, name: stale, resources: {}, policyLabels: [gitops]}
+      - {id: 3, version: 1, service: cm_hive, name: keep, resources: {database: {values: [k]}}, policyLabels: [gitops]}
+    spec:
+      service: cm_hive
+      prune: true
+      managed_label: gitops
+      policies:
+        - {name: keep, resources: {database: k}}
+    expect:
+      summary: {create: 0, update: 0, delete: 1, noop: 1}
+      changes: [[delete, stale]]
+
+  - name: without prune, unknown server policies are left alone
+    server:
+      - {id: 1, version: 1, service: cm_hive, name: other, resources: {}}
+    spec:
+      service: cm_hive
+      policies: []
+    expect:
+      summary: {create: 0, update: 0, delete: 0, noop: 0}
+      changes: []
+
+  - name: masking items keep their order
+    server:
+      - {id: 1, version: 1, service: cm_hive, name: m, policyType: 1, resources: {column: {values: [ssn]}},
+         dataMaskPolicyItems: [
+           {groups: [a], accesses: [{type: select, isAllowed: true}], dataMaskInfo: {dataMaskType: MASK}},
+           {groups: [b], accesses: [{type: select, isAllowed: true}], dataMaskInfo: {dataMaskType: MASK_NULL}}]}
+    spec:
+      service: cm_hive
+      policies:
+        - name: m
+          priority: 0
+          policyType: 1
+          resources: {column: ssn}
+          dataMaskPolicyItems:
+            - {groups: [b], accesses: [select], dataMaskInfo: {dataMaskType: MASK_NULL}}
+            - {groups: [a], accesses: [select], dataMaskInfo: {dataMaskType: MASK}}
+    expect:
+      summary: {create: 0, update: 1, delete: 0, noop: 0}
+      changes: [[update, m, [dataMaskPolicyItems]]]

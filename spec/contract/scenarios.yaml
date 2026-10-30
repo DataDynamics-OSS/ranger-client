@@ -1,0 +1,168 @@
+# Contract scenarios executed by both the Java and the Python test runners.
+#
+# Each scenario issues one SDK operation against a mock server and checks
+#   - the HTTP request the SDK sent (method, path, query, body subset)
+#   - how the SDK interpreted the response (result subset or error type)
+#
+# `op` names are language neutral; each runner maps them to its own API.
+# `responses` are served in order (to exercise retry / failover).
+scenarios:
+  - name: get policy by id
+    op: policies.get
+    args: {id: 7}
+    responses:
+      - status: 200
+        body: {id: 7, guid: g-7, service: cm_hive, name: sales_read, version: 3, isEnabled: true,
+               resources: {database: {values: [sales]}}, futureField: kept}
+    expect_request: {method: GET, path: /service/public/v2/api/policy/7}
+    expect_result: {id: 7, name: sales_read, service: cm_hive, version: 3}
+
+  - name: get policy by service and name
+    op: policies.get_by_name
+    args: {service: cm_hive, name: sales read}
+    responses:
+      - status: 200
+        body: {id: 8, service: cm_hive, name: sales read}
+    expect_request: {method: GET, path: /service/public/v2/api/service/cm_hive/policy/sales%20read}
+    expect_result: {id: 8}
+
+  - name: create policy
+    op: policies.create
+    args:
+      policy: {service: cm_hive, name: p1, resources: {database: {values: [sales]}},
+               policyItems: [{groups: [analyst], accesses: [{type: select, isAllowed: true}]}]}
+    responses:
+      - status: 200
+        body: {id: 11, service: cm_hive, name: p1}
+    expect_request:
+      method: POST
+      path: /service/public/v2/api/policy
+      body: {service: cm_hive, name: p1, policyItems: [{groups: [analyst], accesses: [{type: select, isAllowed: true}]}]}
+    expect_result: {id: 11}
+
+  - name: delete policy by name uses query parameters
+    op: policies.delete_by_name
+    args: {service: cm_hive, name: p1}
+    responses:
+      - status: 204
+    expect_request:
+      method: DELETE
+      path: /service/public/v2/api/policy
+      query: {servicename: cm_hive, policyname: p1}
+
+  - name: search policies sends paging parameters
+    op: policies.search
+    args: {service: cm_hive, start_index: 0, page_size: 2}
+    responses:
+      - status: 200
+        body: [{id: 1, name: a}, {id: 2, name: b}]
+    expect_request:
+      method: GET
+      path: /service/public/v2/api/policy
+      query: {serviceName: cm_hive, startIndex: "0", pageSize: "2"}
+    expect_result_size: 2
+
+  - name: not found maps to RangerNotFoundException
+    op: policies.get
+    args: {id: 404}
+    responses:
+      - status: 404
+        body: {statusCode: 1, msgDesc: "Policy not found"}
+    expect_error: RangerNotFoundException
+
+  - name: validation error maps to RangerValidationException
+    op: policies.create
+    args: {policy: {service: cm_hive, name: bad}}
+    responses:
+      - status: 400
+        body: {statusCode: 1, msgDesc: "invalid resource"}
+    expect_error: RangerValidationException
+
+  - name: duplicate name maps to RangerConflictException
+    op: policies.create
+    args: {policy: {service: cm_hive, name: dup}}
+    responses:
+      - status: 400
+        body: {statusCode: 1, msgDesc: "Another policy already exists for matching resource: policy-name=[dup]"}
+    expect_error: RangerConflictException
+
+  - name: forbidden maps to RangerAccessDeniedException
+    op: policies.get
+    args: {id: 1}
+    responses:
+      - status: 403
+        body: {code: 403, message: "svc is not authorized"}
+    expect_error: RangerAccessDeniedException
+
+  - name: idempotent GET is retried on 503
+    op: policies.get
+    args: {id: 5}
+    responses:
+      - status: 503
+      - status: 200
+        body: {id: 5, name: retried}
+    expect_result: {id: 5, name: retried}
+    expect_request_count: 2
+
+  - name: POST is not retried on 503
+    op: policies.create
+    args: {policy: {service: cm_hive, name: once}}
+    responses:
+      - status: 503
+      - status: 200
+        body: {id: 1}
+    expect_error: RangerServerException
+    expect_request_count: 1
+
+  - name: unknown role name (Ranger answers 400) maps to RangerNotFoundException
+    op: roles.get_by_name
+    args: {name: nope}
+    responses:
+      - status: 400
+        body: {statusCode: 1, msgDesc: "Role with name: nope does not exist"}
+    expect_error: RangerNotFoundException
+
+  - name: role grant
+    op: roles.grant
+    args: {service: cm_hive, request: {targetRoles: [r1], users: [alice], grantor: admin}}
+    responses:
+      - status: 200
+        body: {statusCode: 0}
+    expect_request:
+      method: PUT
+      path: /service/public/v2/api/roles/grant/cm_hive
+      body: {targetRoles: [r1], users: [alice]}
+
+  - name: pdp authorize builds RRN resource name
+    op: pdp.authorize
+    args: {user: alice, service_type: hive, service: dev_hive,
+           resource: [[database, sales], [table, orders]], access: select}
+    responses:
+      - status: 200
+        body: {requestId: r1, decision: ALLOW,
+               permissions: {select: {permission: select, access: {decision: ALLOW, policy: {id: 3, version: 1}}}}}
+    expect_request:
+      method: POST
+      path: /authz/v1/authorize
+      body:
+        user: {name: alice}
+        access: {resource: {name: "table:sales/orders"}, permissions: [select]}
+        context: {serviceType: hive, serviceName: dev_hive}
+    expect_result: {decision: ALLOW}
+
+  - name: pdp unknown decision is preserved
+    op: pdp.authorize
+    args: {user: alice, service_type: hive, service: dev_hive, resource: [[database, sales]], access: select}
+    responses:
+      - status: 200
+        body: {decision: SOMETHING_NEW}
+    expect_result: {decision: UNKNOWN, decision_raw: SOMETHING_NEW}
+
+  - name: kms key metadata
+    op: kms.metadata
+    args: {name: key1}
+    responses:
+      - status: 200
+        body: {name: key1, cipher: AES/CTR/NoPadding, length: 128, versions: 2}
+    expect_request: {method: GET, path: /kms/v1/key/key1/_metadata}
+    expect_result: {name: key1, versions: 2}

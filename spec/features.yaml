@@ -1,0 +1,57 @@
+# Feature matrix shared by the Java and Python SDKs and the contract tests.
+#
+# min_version : first Ranger release that ships the API
+# server      : admin | kms | pdp
+# probe       : path probed (GET) when the server version is unknown.
+#               Any status other than 404 means the feature is present.
+supported_servers:
+  min: "2.5.0"
+  max: "2.9.99"
+
+features:
+  SERVICE_DEFS:
+    server: admin
+    min_version: "2.5.0"
+    probe: /service/public/v2/api/servicedef?pageSize=1
+  SERVICES:
+    server: admin
+    min_version: "2.5.0"
+    probe: /service/public/v2/api/service?pageSize=1
+  POLICIES:
+    server: admin
+    min_version: "2.5.0"
+    probe: /service/public/v2/api/policy?pageSize=1
+  ROLES:
+    server: admin
+    min_version: "2.5.0"
+    probe: /service/public/v2/api/roles/names
+  USERS:
+    server: admin
+    min_version: "2.5.0"
+    probe: /service/xusers/users?pageSize=1
+  TAGS:
+    server: admin
+    min_version: "2.5.0"
+    probe: /service/tags/types/
+  ZONES:
+    server: admin
+    min_version: "2.5.0"
+    probe: /service/public/v2/api/zone-headers
+  ZONES_V2:
+    server: admin
+    min_version: "2.5.0"
+    probe: /service/public/v2/api/zones-v2?pageSize=1
+  GDS:
+    # Governed Data Sharing is not part of the 2.x release line (no GdsREST in
+    # release-ranger-2.9.0); it ships from the 3.x line.
+    server: admin
+    min_version: "3.0.0"
+    probe: /service/gds/dataset?pageSize=1
+  KMS:
+    server: kms
+    min_version: "2.5.0"
+    probe: /kms/api/status
+  PDP:
+    server: pdp
+    min_version: "2.9.0"
+    probe: null

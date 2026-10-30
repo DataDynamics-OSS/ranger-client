@@ -1,0 +1,68 @@
+# OpenTelemetry tracing contract: both SDKs emit the same spans for the same exchange.
+#
+# One CLIENT span per HTTP attempt (retries and failovers are separate spans, following the OTel HTTP
+# semantic conventions), each a child of the caller's current span, and each attempt carries the W3C
+# `traceparent` of its own span. Every span also has `ranger.request_id` equal to the X-Request-Id header.
+#
+# expect_spans, in order:
+#   name        span name
+#   status      UNSET | ERROR
+#   attributes  must be present with these values ("*" = any value)
+#   absent      must not be present
+#   url_path    path part of url.full (the host differs per runner)
+scenarios:
+  - name: retried GET gives one span per attempt
+    op: policies.get
+    args: {id: 5}
+    responses:
+      - status: 503
+      - status: 200
+        body: {id: 5, name: p}
+    expect_spans:
+      - name: GET
+        status: ERROR
+        url_path: /service/public/v2/api/policy/5
+        attributes: {http.request.method: GET, http.response.status_code: 503, error.type: "503",
+                     ranger.server: admin, server.address: "*", server.port: "*"}
+        absent: [http.request.resend_count]
+      - name: GET
+        status: UNSET
+        url_path: /service/public/v2/api/policy/5
+        attributes: {http.request.method: GET, http.response.status_code: 200, http.request.resend_count: 1,
+                     ranger.server: admin}
+        absent: [error.type]
+
+  - name: a 4xx answer is an error span and is not retried
+    op: policies.get
+    args: {id: 404}
+    responses:
+      - status: 404
+        body: {msgDesc: "Policy not found"}
+    expect_spans:
+      - name: GET
+        status: ERROR
+        attributes: {http.response.status_code: 404, error.type: "404"}
+
+  - name: pdp calls are POST spans of the pdp server
+    op: pdp.authorize
+    args: {user: alice, service_type: hive, service: dev_hive, resource: [[database, sales]], access: select}
+    responses:
+      - status: 200
+        body: {decision: ALLOW}
+    expect_spans:
+      - name: POST
+        status: UNSET
+        url_path: /authz/v1/authorize
+        attributes: {http.request.method: POST, http.response.status_code: 200, ranger.server: pdp}
+
+  - name: no response gives an error span with the exception type
+    op: policies.get
+    args: {id: 1}
+    max_attempts: 1
+    responses:
+      - error: connect
+    expect_spans:
+      - name: GET
+        status: ERROR
+        attributes: {error.type: "*"}
+        absent: [http.response.status_code]

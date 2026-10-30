@@ -1,0 +1,17 @@
+# Python
+python/.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+python/build/
+python/dist/
+
+# Java
+java/**/target/
+*.class
+
+# IDE
+.idea/
+.vscode/
+*.iml

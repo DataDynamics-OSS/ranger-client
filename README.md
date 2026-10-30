@@ -85,13 +85,13 @@ Spring Boot 4.x, Java 17+ 전용 모듈이다(나머지 SDK는 Java 11 유지).
 <dependency>
     <groupId>io.datadynamics.ranger.client</groupId>
     <artifactId>ranger-sdk-spring-boot-starter</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>0.1.0</version>
 </dependency>
 <!-- Kerberos를 쓸 때만 -->
 <dependency>
     <groupId>io.datadynamics.ranger.client</groupId>
     <artifactId>ranger-sdk-auth-kerberos</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>0.1.0</version>
 </dependency>
 ```
 

@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ko">
+<head th:replace="~{fragments :: head('KMS')}"></head>
+<body>
+<header th:replace="~{fragments :: nav('kms')}"></header>
+<div class="layout">
+<main>
+    <h1>KMS</h1>
+    <p class="lead"><code>RangerKmsClient</code>로 키를 관리합니다(Ranger KMS가 제공하는 Hadoop KMS REST API). 클라이언트는 Hadoop simple
+        인증으로 <code>keyadmin</code>(<code>?user.name=keyadmin</code>)이 되고, <code>dev_kms</code> 정책이 keyadmin에게 모든 키 작업을
+        허용합니다. 다른 사용자의 키 작업은 그 정책에 막힙니다(<code>RangerAccessDeniedException</code>).</p>
+
+    <section class="panel">
+        <h3>키</h3>
+        <div th:replace="~{kms/kms :: keys}"></div>
+    </section>
+
+    <h2>결과</h2>
+    <div id="kms-result"><p class="muted small">키 동작의 SDK 호출이 여기에 나타납니다.</p></div>
+
+    <div class="grid2">
+        <section class="panel">
+            <h3>키 만들기</h3>
+            <form class="stack" hx-post="/kms/create" hx-target="#kms-result">
+                <div class="row">
+                    <label>이름<input type="text" name="name" placeholder="sdk_demo_key" required pattern="[A-Za-z0-9_.-]+"></label>
+                    <label>길이
+                        <select name="length"><option>128</option><option>256</option></select></label>
+                </div>
+                <label>암호(cipher)<input type="text" name="cipher" value="AES/CTR/NoPadding"></label>
+                <label>설명<input type="text" name="description" placeholder="선택"></label>
+                <label>속성 (key=value, …, 선택)<input type="text" name="attributes" placeholder="owner=demo"></label>
+                <div class="actions"><button type="submit">createKey</button></div>
+            </form>
+        </section>
+        <section class="panel">
+            <h3>암호화된 데이터 키 (EEK)</h3>
+            <p class="muted small">HDFS 암호화 영역이 KMS를 쓰는 방식입니다. KMS는 영역 키로 암호화한 데이터 키(EEK)를 내주고,
+                <code>decrypteek</code> 권한이 있는 클라이언트는 평문 데이터 키를 돌려받습니다. 키를 롤오버한 뒤 <code>reencryptEek</code>는
+                데이터 키를 드러내지 않고 EEK를 새 키 버전으로 옮깁니다.</p>
+            <form class="form-row" hx-post="/kms/eek" hx-target="#eek-result">
+                <label>키
+                    <select name="name">
+                        <option th:each="n : ${names}" th:value="${n}" th:text="${n}" th:selected="${n == 'demo-key'}"></option>
+                    </select></label>
+                <label class="check"><input type="checkbox" name="rollover" value="true"> 다시 암호화하기 전에 롤오버</label>
+                <button type="submit">generate → decrypt → re-encrypt</button>
+            </form>
+            <div id="eek-result"></div>
+        </section>
+    </div>
+    <section th:replace="~{fragments :: trace}"></section>
+</main>
+<aside class="help" th:replace="~{help/kms :: help}"></aside>
+</div>
+
+<!--/* ===== 조각 ===== */-->
+<!--/* 조각 정의만 담습니다. 화면 전체를 그릴 때는 그리지 않고, 컨트롤러가 이름으로 골라 돌려줄 때만 씁니다. */-->
+<th:block th:if="${false}">
+
+<div th:fragment="keys" id="keys" th:attr="hx-swap-oob=${oob} ? 'true' : null">
+    <th:block th:if="${namesCall.ok()}">
+        <p th:if="${#lists.isEmpty(names)}" class="muted">키 없음</p>
+        <table th:unless="${#lists.isEmpty(names)}">
+            <thead><tr><th>이름</th><th>암호</th><th>길이</th><th>버전 수</th><th>만든 시각</th><th>동작</th></tr></thead>
+            <tbody th:if="${metaCall != null and metaCall.ok()}">
+            <tr th:each="m : ${metaCall.result()}">
+                <td><strong th:text="${m.getName()}"></strong>
+                    <div class="small muted" th:if="${m.getDescription() != null}" th:text="${m.getDescription()}"></div>
+                    <div class="small" th:if="${m.getAttributes() != null and !#maps.isEmpty(m.getAttributes())}">
+                        <span class="badge" th:each="a : ${m.getAttributes()}" th:text="${a.key} + '=' + ${a.value}"></span></div>
+                </td>
+                <td><code class="small" th:text="${m.getCipher()}"></code></td>
+                <td th:text="${m.getLength()}"></td>
+                <td th:text="${m.getVersions()}"></td>
+                <td class="small" th:text="${created != null} ? ${created.get(m.getName())} : ''"></td>
+                <td>
+                    <div style="display: flex; flex-wrap: wrap; gap: 4px" th:with="base=${'/kms/' + m.getName()}">
+                        <button class="secondary" th:attr="hx-post=${base + '/metadata'}" hx-target="#kms-result">metadata</button>
+                        <button class="secondary" th:attr="hx-post=${base + '/current'}" hx-target="#kms-result">current</button>
+                        <button class="secondary" th:attr="hx-post=${base + '/versions'}" hx-target="#kms-result">versions</button>
+                        <button class="secondary" th:attr="hx-post=${base + '/rollover'}" hx-target="#kms-result">rollover</button>
+                        <button class="secondary" th:attr="hx-post=${base + '/invalidate'}" hx-target="#kms-result">invalidateCache</button>
+                        <button class="danger" th:attr="hx-post=${base + '/delete'},hx-confirm=${'키 ' + m.getName() + '와 모든 버전을 삭제할까요?'}"
+                                hx-target="#kms-result">delete</button>
+                    </div>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+    </th:block>
+    <details>
+        <summary class="small">목록을 읽은 호출</summary>
+        <section th:replace="~{fragments/call :: panel(${namesCall})}"></section>
+        <section th:replace="~{fragments/call :: panel(${metaCall})}"></section>
+    </details>
+</div>
+
+<!--/* 동작의 호출 결과와, 대역 밖(out of band)으로 바꿔 끼우는 새 키 표. */-->
+<div th:fragment="change">
+    <section th:replace="~{fragments/call :: panel(${call})}"></section>
+    <section th:replace="~{fragments :: actionTrace}"></section>
+    <th:block th:with="oob=true"><div th:replace="~{kms/kms :: keys}"></div></th:block>
+</div>
+
+<div th:fragment="eekResult">
+    <ol>
+        <li th:each="s : ${steps}"><section th:replace="~{fragments/call :: panel(${s})}"></section></li>
+    </ol>
+    <section th:replace="~{fragments :: actionTrace}"></section>
+</div>
+
+</th:block>
+</body>
+</html>

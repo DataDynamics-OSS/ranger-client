@@ -1,0 +1,49 @@
+# Demo policies for the demo_hive service, applied at startup with Policy-as-Code (plan -> apply).
+# Edit and re-plan this document on the "Policy as Code" page.
+service: demo_hive
+prune: true
+managed_label: demo-seed       # prune touches only policies carrying this label
+
+roles:
+  - name: analysts
+    description: Analysts who read sales data
+    users: [alice]
+    groups: [analyst]
+
+policies:
+  - name: sales_read
+    description: Analysts read every sales table
+    labels: [demo-seed]
+    resources: {database: sales, table: "*", column: "*"}
+    allow:
+      - {roles: [analysts], accesses: [select]}
+      - {groups: [engineer], accesses: [select, update, alter]}
+    deny:
+      - {users: [mallory], accesses: [select]}
+
+  - name: finance_admin
+    description: Engineers own the finance database
+    labels: [demo-seed]
+    resources: {database: finance, table: "*", column: "*"}
+    allow:
+      - {groups: [engineer], accesses: [all]}
+
+  - name: mask_customer_email
+    description: Analysts see a hashed customer email
+    labels: [demo-seed]
+    policy_type: 1
+    resources: {database: sales, table: customers, column: email}
+    data_mask_policy_items:
+      - groups: [analyst]
+        accesses: [select]
+        data_mask_info: {data_mask_type: MASK_HASH}
+
+  - name: orders_region_filter
+    description: Analysts see only APAC orders
+    labels: [demo-seed]
+    policy_type: 2
+    resources: {database: sales, table: orders}
+    row_filter_policy_items:
+      - groups: [analyst]
+        accesses: [select]
+        row_filter_info: {filter_expr: "region = 'APAC'"}

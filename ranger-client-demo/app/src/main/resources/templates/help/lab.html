@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ko">
+<body>
+<aside class="help" th:fragment="help">
+    <div th:replace="~{fragments :: helpTitle('장애 실험', '네트워크 장애, 시간 초과, 서버 오류, 동시 수정에서 SDK가 어떻게 움직이는지 직접 일으켜 봅니다.')}"></div>
+
+    <h3>왜 이 화면이 있나?</h3>
+    <p>운영 환경의 Ranger는 여러 대로 돌고, 가끔 한 대가 죽거나 느려지고, 여러 사람이 같은 정책을 동시에 고칩니다.
+        SDK는 이런 상황을 클라이언트 쪽에서 처리합니다. 이 화면은 그 동작을 버튼 하나로 재현하고, 아래 요청 기록에서 시도 하나하나를 보여 줍니다.</p>
+
+    <h3>장애 조치와 cooldown</h3>
+    <p>클라이언트에 URL을 여러 개 주면 돌아가며 씁니다. 연결에 실패한 노드는 <span class="term">cooldown</span>(기본 30초) 동안 후보에서 빠지고,
+        같은 호출은 다음 노드로 이어집니다. 5xx를 돌려준 노드도 같이 빠집니다.</p>
+    <pre class="diagram">시도 #1  ranger-admin-down.invalid  ✗ 연결 실패 → cooldown
+시도 #2  ranger-admin:6080          ✓ 200</pre>
+
+    <h3>재시도 규칙</h3>
+    <ul>
+        <li>재시도 대상: 연결 실패·시간 초과, 429, 5xx.</li>
+        <li><b>멱등 요청</b>(GET/PUT/DELETE, PDP의 POST)만 재시도합니다. 정책 생성 같은 POST는 두 번 만들어질 수 있으므로
+            <code>retryNonIdempotent(true)</code>를 켜지 않으면 재시도하지 않습니다. 단, 아예 보내지 못한 연결 실패는 재시도합니다.</li>
+        <li>대기 시간은 지수 백오프 + 지터이고, 서버가 <code>Retry-After</code>를 주면 그것을 따릅니다.</li>
+        <li>모든 시도는 같은 <code>X-Request-Id</code>를 답니다. 서버 로그에서 한 호출의 재시도를 묶어 볼 수 있습니다.</li>
+        <li>401은 인증을 새로 고친 뒤(세션 쿠키, JWT) 한 번 다시 보냅니다. 재시도 횟수에는 들어가지 않으므로 시도 #1이 두 번 보입니다.</li>
+    </ul>
+
+    <h3>낙관적 잠금</h3>
+    <p>Ranger의 정책 PUT은 버전을 비교하지 않아 나중에 쓴 쪽이 조용히 이깁니다. <code>update(policy, true)</code>는 보내기 전에 서버의 현재
+        <code>version</code>을 읽어 비교하고, 다르면 <code>RangerConflictException</code>을 던집니다. Policy as Code의 apply도 같은 확인을 합니다.</p>
+
+    <h3>따라 해 보기</h3>
+    <ol>
+        <li><b>① 장애 조치</b>를 누릅니다. 요청 기록에 시도 #1(연결 실패)과 #2(200)가 보이고, 노드 표에서 죽은 노드가 "쉬는 중"이 됩니다.</li>
+        <li>30초 안에 다시 누릅니다. 이번에는 바로 살아 있는 노드로 가므로 시도가 한 번입니다.</li>
+        <li><b>② 재시도</b>를 누르고 요청 기록에서 시도 1·2·3의 X-Request-Id가 같은지 펼쳐 확인합니다.</li>
+        <li><b>③ 예외 모음</b>의 버튼을 차례로 눌러 오류 상자의 예외 타입과 HTTP 상태를 비교합니다.</li>
+        <li><b>④ 동시 수정</b>을 누릅니다. 네 번째 단계(사본 B 저장)만 실패하고, 마지막 단계가 설명을 되돌립니다.</li>
+    </ol>
+    <div class="tip">실험용 클라이언트는 스타터가 만든 빈이 아니므로 Micrometer 지표에는 잡히지 않습니다. 요청 기록에는 <code>lab-…</code>
+        이름으로 남습니다.</div>
+
+    <h3>이 화면이 쓰는 API</h3>
+    <pre class="code" data-lang="java">RangerAdminClient failover = RangerAdminClient.builder()
+        .urls("http://ranger-admin-down.invalid:6080", "http://ranger-admin:6080")
+        .auth(BasicAuth.of("admin", password))
+        .cooldown(Duration.ofSeconds(30))          // 기본값
+        .build();
+Map&lt;URI, Boolean&gt; nodes = failover.nodeAvailability();  // false = cooldown 중
+
+RangerAdminClient slow = RangerAdminClient.builder()
+        .urls("http://ranger-admin:6080").auth(auth)
+        .readTimeout(Duration.ofMillis(1))
+        .retry(RetryPolicy.exponential(3, Duration.ofMillis(100)))
+        .build();
+
+try {
+    admin.policies().update(staleCopy, true);  // 버전 확인
+} catch (RangerConflictException e) {
+    // 다시 읽고 다시 고치기
+}</pre>
+</aside>
+</body>
+</html>

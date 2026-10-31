@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ko">
+<!--/* 모든 화면이 함께 쓰는 조각입니다. 화면 하나는 다음 모양입니다.
+
+<head th:replace="~{fragments :: head('정책')}"></head>
+<body>
+<header th:replace="~{fragments :: nav('policies')}"></header>
+<div class="layout">
+<main> ... <section th:replace="~{fragments :: trace}"></section></main>
+<aside class="help" th:replace="~{help/policies :: help}"></aside>
+</div>
+</body>
+*/-->
+<head th:fragment="head(title)">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title th:text="${title} + ' · Ranger Client Demo'">Ranger Client Demo</title>
+    <meta name="monaco-base" th:content="@{/webjars/monaco-editor/min/vs}">
+    <link rel="stylesheet" th:href="@{/css/demo.css}">
+    <script th:src="@{/webjars/htmx.org/dist/htmx.min.js}" defer></script>
+    <script th:src="@{/js/demo.js}" defer></script>
+</head>
+<body>
+
+<header th:fragment="nav(active)" class="nav">
+    <a class="brand" th:href="@{/}">Ranger Client Demo</a>
+    <nav>
+        <a th:href="@{/}" th:classappend="${active == 'dashboard'} ? 'active'">대시보드</a>
+        <a th:href="@{/servicedefs}" th:classappend="${active == 'servicedefs'} ? 'active'">서비스 정의</a>
+        <a th:href="@{/services}" th:classappend="${active == 'services'} ? 'active'">서비스</a>
+        <a th:href="@{/policies}" th:classappend="${active == 'policies'} ? 'active'">정책</a>
+        <a th:href="@{/roles}" th:classappend="${active == 'roles'} ? 'active'">역할</a>
+        <a th:href="@{/principals}" th:classappend="${active == 'principals'} ? 'active'">사용자·그룹</a>
+        <a th:href="@{/zones}" th:classappend="${active == 'zones'} ? 'active'">보안 영역</a>
+        <a th:href="@{/tags}" th:classappend="${active == 'tags'} ? 'active'">태그</a>
+        <span class="sep"></span>
+        <a th:href="@{/pdp}" th:classappend="${active == 'pdp'} ? 'active'">PDP 권한 확인</a>
+        <a th:href="@{/kms}" th:classappend="${active == 'kms'} ? 'active'">KMS</a>
+        <span class="sep"></span>
+        <a th:href="@{/pac}" th:classappend="${active == 'pac'} ? 'active'">Policy as Code</a>
+        <a th:href="@{/lab}" th:classappend="${active == 'lab'} ? 'active'">장애 실험</a>
+        <a th:href="@{/calls}" th:classappend="${active == 'calls'} ? 'active'">요청 기록</a>
+    </nav>
+    <button type="button" class="help-toggle" data-help-toggle title="도움말 보이기/숨기기">? 도움말</button>
+</header>
+
+<!-- 성공 메시지(message)와 실패(failure, Failure 레코드)를 보여 줍니다. -->
+<div th:fragment="alerts">
+    <div class="alert ok" th:if="${message}" th:text="${message}"></div>
+    <th:block th:if="${failure}"><div th:replace="~{fragments :: failure(${failure})}"></div></th:block>
+</div>
+
+<!-- 예외 하나. SDK 예외의 타입(클래스)과 Ranger가 돌려준 상태 코드·메시지를 함께 보여 주는 것이 핵심입니다. -->
+<div th:fragment="failure(f)" class="alert error">
+    <strong th:text="${f.simpleType()}">RangerNotFoundException</strong>
+    <span class="badge" th:if="${f.status()}" th:text="'HTTP ' + ${f.status()}"></span>
+    <code th:if="${f.request()}" th:text="${f.request()}"></code>
+    <div class="pre-wrap" th:text="${f.message()}"></div>
+    <dl class="kv small" th:if="${f.serverMessage() != null or f.requestId() != null}">
+        <dt th:if="${f.serverMessage()}">서버 메시지</dt><dd th:if="${f.serverMessage()}" th:text="${f.serverMessage()}"></dd>
+        <dt th:if="${f.server()}">서버</dt><dd th:if="${f.server()}" th:text="${f.server()}"></dd>
+        <dt th:if="${f.requestId()}">X-Request-Id</dt><dd th:if="${f.requestId()}"><code th:text="${f.requestId()}"></code></dd>
+    </dl>
+    <div class="muted small" th:text="${f.type()}"></div>
+</div>
+
+<!-- 이 화면(웹 요청)을 처리하는 동안 클라이언트가 Ranger에 보낸 요청 목록입니다. 데모에서 가장 보여 주고 싶은 부분입니다. -->
+<section th:fragment="trace" class="trace" th:if="${trace != null}">
+    <h3>이 화면에서 클라이언트가 보낸 요청 <span class="muted" th:text="'(' + ${#lists.size(trace)} + ')'"></span></h3>
+    <p class="muted small" th:if="${#lists.isEmpty(trace)}">Ranger REST 요청 없음 (캐시나 입력 검증으로 처리됨)</p>
+    <div th:replace="~{fragments :: requestTable(${trace})}"></div>
+</section>
+
+<!-- htmx 동작의 결과 조각 아래에 붙이는 요청 목록입니다. 제목만 다릅니다. -->
+<section th:fragment="actionTrace" class="trace action" th:if="${trace != null}">
+    <h4>이 동작에서 클라이언트가 보낸 요청 <span class="muted" th:text="'(' + ${#lists.size(trace)} + ')'"></span></h4>
+    <p class="muted small" th:if="${#lists.isEmpty(trace)}">Ranger REST 요청 없음 (캐시나 입력 검증으로 처리됨)</p>
+    <div th:replace="~{fragments :: requestTable(${trace})}"></div>
+</section>
+
+<table th:fragment="requestTable(requests)" class="requests" th:unless="${#lists.isEmpty(requests)}">
+    <thead><tr><th>#</th><th>클라이언트</th><th>메서드</th><th>경로</th><th>시도</th><th>상태</th><th>시간</th></tr></thead>
+    <tbody>
+    <tr th:each="r : ${requests}" class="request-row" th:classappend="${r.failed()} ? 'failed'">
+        <td th:text="${r.id()}"></td>
+        <td><span class="badge" th:text="${r.client()}">admin</span></td>
+        <td><span class="method" th:text="${r.method()}"></span></td>
+        <td class="path">
+            <details>
+                <summary th:text="${r.target()}"></summary>
+                <div class="muted small" th:text="${r.uri()}"></div>
+                <div class="muted small">X-Request-Id <code th:text="${r.requestId()}"></code></div>
+                <div th:if="${r.requestBody()}"><h4>요청 본문</h4>
+                    <pre class="code" th:attr="data-lang=${r.requestLang()}" th:text="${r.requestBody()}"></pre></div>
+                <div th:if="${r.responseBody()}"><h4>응답 본문</h4>
+                    <pre class="code" th:attr="data-lang=${r.responseLang()}" th:text="${r.responseBody()}"></pre></div>
+                <div th:if="${r.error()}"><h4>실패</h4><pre class="code" data-lang="text" th:text="${r.error()}"></pre></div>
+            </details>
+        </td>
+        <td th:text="${r.attempt()}"></td>
+        <td th:text="${r.status() != null} ? ${r.status()} : '연결 실패'"></td>
+        <td th:text="${r.elapsedMs()} + ' ms'"></td>
+    </tr>
+    </tbody>
+</table>
+
+<div th:fragment="helpTitle(title, lead)">
+    <div class="help-title"><h2 th:text="'도움말 · ' + ${title}">도움말</h2>
+        <button type="button" data-help-toggle title="도움말 숨기기">×</button></div>
+    <p class="help-lead" th:text="${lead}"></p>
+</div>
+
+</body>
+</html>

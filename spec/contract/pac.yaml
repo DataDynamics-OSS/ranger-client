@@ -105,3 +105,26 @@ cases:
     expect:
       summary: {create: 0, update: 1, delete: 0, noop: 0}
       changes: [[update, m, [dataMaskPolicyItems]]]
+
+  - name: snake_case keys inside mask and row filter items match the server's camelCase
+    server:
+      - {id: 1, version: 1, service: cm_hive, name: m, policyType: 1, resources: {column: {values: [email]}},
+         dataMaskPolicyItems: [{groups: [a], accesses: [{type: select, isAllowed: true}], dataMaskInfo: {dataMaskType: MASK_HASH}}]}
+      - {id: 2, version: 1, service: cm_hive, name: r, policyType: 2, resources: {table: {values: [orders]}},
+         rowFilterPolicyItems: [{groups: [a], accesses: [{type: select, isAllowed: true}], rowFilterInfo: {filterExpr: "region = 'APAC'"}}]}
+    spec:
+      service: cm_hive
+      policies:
+        - name: m
+          policy_type: 1
+          resources: {column: email}
+          data_mask_policy_items:
+            - {groups: [a], accesses: [select], data_mask_info: {data_mask_type: MASK_HASH}}
+        - name: r
+          policy_type: 2
+          resources: {table: orders}
+          row_filter_policy_items:
+            - {groups: [a], accesses: [select], row_filter_info: {filter_expr: "region = 'APAC'"}}
+    expect:
+      summary: {create: 0, update: 0, delete: 0, noop: 2}
+      changes: []

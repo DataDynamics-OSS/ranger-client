@@ -22,7 +22,7 @@ from ranger_sdk.errors import (
 from ranger_sdk.kms import AsyncRangerKms, RangerKms
 from ranger_sdk.pdp import AsyncRangerPdp, RangerPdp
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = [
     "RangerAdmin",

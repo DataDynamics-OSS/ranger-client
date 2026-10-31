@@ -1,0 +1,65 @@
+spring:
+  application:
+    name: ranger-client-demo
+  thymeleaf:
+    cache: false
+
+server:
+  port: 8080
+
+# Ranger SDK starter: one client bean per server. Docker compose sets the URLs and password;
+# the "local" profile points at the ports published on localhost.
+ranger:
+  admin:
+    urls: ${RANGER_ADMIN_URLS:http://ranger-admin:6080}
+    auth:
+      type: basic
+      username: admin
+      password: ${RANGER_ADMIN_PASSWORD}
+    read-timeout: 30s
+  pdp:
+    urls: ${RANGER_PDP_URLS:http://ranger-pdp:6500}
+    service: demo_hive
+    service-type: hive
+    auth:
+      type: header
+      header: X-Forwarded-User
+      user: demo-app        # delegation user of every service in ranger-pdp-site.xml
+  kms:
+    urls: ${RANGER_KMS_URLS:http://ranger-kms:9292}
+    auth:
+      type: hadoop-simple
+      user: keyadmin        # dev_kms grants keyadmin every key operation
+
+demo:
+  seed:
+    enabled: true
+    timeout: 5m
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+      probes:
+        enabled: true
+
+logging:
+  level:
+    io.datadynamics.ranger: INFO
+
+---
+spring:
+  config:
+    activate:
+      on-profile: local
+ranger:
+  admin:
+    urls: http://localhost:6080
+  pdp:
+    urls: http://localhost:6500
+  kms:
+    urls: http://localhost:9292

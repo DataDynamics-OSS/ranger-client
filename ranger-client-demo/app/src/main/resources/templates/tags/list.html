@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ko">
+<head th:replace="~{fragments :: head('태그')}"></head>
+<body>
+<header th:replace="~{fragments :: nav('tags')}"></header>
+<div class="layout">
+<main>
+    <h1>태그</h1>
+    <p class="lead">태그 기반 정책이 쓰는 태그 저장소입니다. 태그 정의, 태그, 서비스 리소스, 그리고 그 사이의 매핑을 다룹니다.
+        태그 서비스 <code>demo_tag</code>에 <code>PII</code> 태그 정책을 만들면 PII 태그가 매핑된 모든 리소스에 적용됩니다.</p>
+
+    <form class="panel form-row" method="get" th:action="@{/tags}">
+        <label>리소스를 볼 서비스<input type="text" name="service" th:value="${service}"></label>
+        <button type="submit">보기</button>
+        <a th:href="@{/policies(service='demo_tag')}">태그 기반 정책 (demo_tag) &rarr;</a>
+    </form>
+
+    <section id="list" th:attr="hx-get=${self}" hx-trigger="refresh from:body" hx-select="#list" hx-swap="outerHTML">
+        <div th:replace="~{fragments/call :: panel(${types})}"></div>
+        <div class="grid2">
+            <section class="panel">
+                <h3>태그 정의</h3>
+                <div th:replace="~{fragments/call :: panel(${defsCall})}"></div>
+                <table>
+                    <thead><tr><th>id</th><th>이름</th><th>출처</th><th>속성</th></tr></thead>
+                    <tbody>
+                    <tr th:each="d : ${defs}">
+                        <td th:text="${d.getId()}"></td><td th:text="${d.getName()}"></td><td th:text="${d.getSource()}"></td>
+                        <td><span class="badge" th:each="a : ${d.getAttributeDefs()}" th:text="${a.getName()} + ':' + ${a.getType()}"></span></td>
+                    </tr>
+                    </tbody>
+                </table>
+            </section>
+            <section class="panel">
+                <h3>태그</h3>
+                <div th:replace="~{fragments/call :: panel(${tagsCall})}"></div>
+                <table>
+                    <thead><tr><th>id</th><th>종류</th><th>속성</th><th>guid</th></tr></thead>
+                    <tbody>
+                    <tr th:each="t : ${tags}">
+                        <td th:text="${t.getId()}"></td><td th:text="${t.getType()}"></td>
+                        <td class="small" th:text="${t.getAttributes()}"></td>
+                        <td class="muted small" th:text="${t.getGuid()}"></td>
+                    </tr>
+                    </tbody>
+                </table>
+            </section>
+        </div>
+        <section class="panel">
+            <h3>서비스 리소스: <span th:text="${service}"></span></h3>
+            <div th:replace="~{fragments/call :: panel(${resCall})}"></div>
+            <table>
+                <thead><tr><th>id</th><th>리소스</th><th>시그니처</th><th>guid</th></tr></thead>
+                <tbody>
+                <tr th:each="r : ${resources}">
+                    <td th:text="${r.getId()}"></td>
+                    <td class="small"><div th:each="e : ${r.getResourceElements()}"><code th:text="${e.key}"></code>=<span th:text="${#strings.listJoin(e.value.getValues(), ',')}"></span></div></td>
+                    <td class="muted small path" th:text="${r.getResourceSignature()}"></td>
+                    <td class="muted small" th:text="${r.getGuid()}"></td>
+                </tr>
+                </tbody>
+            </table>
+        </section>
+    </section>
+
+    <h2>동작</h2>
+    <div id="result"></div>
+    <div class="grid2">
+        <div>
+            <section class="panel" id="mapform" th:attr="hx-get=${self}" hx-trigger="refresh from:body" hx-select="#mapform" hx-swap="outerHTML"
+                     hx-disinherit="*">
+                <h3>태그를 리소스에 매핑</h3>
+                <p class="muted small">같은 쌍을 두 번 매핑하면 <code>RangerConflictException</code>입니다. 주의: Ranger는 매핑을 지울 때 태그도
+                    지우려 하므로, 마지막 매핑이면 태그가 사라지고 다른 매핑이 남은 태그는 <b>unmap</b>이 실패합니다.</p>
+                <form class="stack" hx-post="/tags/map" hx-target="#result">
+                    <label>태그
+                        <select name="tagGuid">
+                            <option th:each="t : ${tags}" th:value="${t.getGuid()}" th:text="|${t.getType()} #${t.getId()} ${t.getAttributes()}|"></option>
+                        </select>
+                    </label>
+                    <label>리소스
+                        <select name="resourceGuid">
+                            <option th:each="r : ${resources}" th:value="${r.getGuid()}"
+                                    th:text="|#${r.getId()} ${r.getResourceElements().keySet()}|"></option>
+                        </select>
+                    </label>
+                    <div class="actions">
+                        <button name="op" value="map">map</button>
+                        <button name="op" value="unmap" class="secondary">unmap</button>
+                    </div>
+                </form>
+            </section>
+            <section class="panel">
+                <h3>태그 정의</h3>
+                <form class="stack" hx-post="/tags/defs/create" hx-target="#result">
+                    <div class="row">
+                        <label>이름<input type="text" name="name" value="CONFIDENTIAL"></label>
+                        <label>속성<input type="text" name="attributes" value="owner"></label>
+                        <label class="check"><input type="checkbox" name="updateIfExists" value="true"> updateIfExists</label>
+                    </div>
+                    <div class="actions"><button>createDef</button></div>
+                </form>
+                <form class="stack" hx-post="/tags/defs/delete" hx-target="#result" hx-confirm="이 태그 정의를 삭제할까요?" style="margin-top: 12px">
+                    <div class="row">
+                        <label>정의 id<input name="id" type="number"></label>
+                        <button class="danger">deleteDef</button>
+                    </div>
+                </form>
+            </section>
+        </div>
+        <div>
+            <section class="panel">
+                <h3>태그</h3>
+                <form class="stack" hx-post="/tags/create" hx-target="#result">
+                    <div class="row">
+                        <label>종류<input type="text" name="type" value="PII"></label>
+                        <label>속성<input type="text" name="attributes" value="level=low"></label>
+                        <button>create</button>
+                    </div>
+                </form>
+                <form class="stack" hx-post="/tags/delete" hx-target="#result" hx-confirm="이 태그를 삭제할까요?" style="margin-top: 12px">
+                    <div class="row">
+                        <label>태그 id<input name="id" type="number"></label>
+                        <button class="danger">delete</button>
+                    </div>
+                </form>
+            </section>
+            <section class="panel">
+                <h3>서비스 리소스</h3>
+                <form class="stack" hx-post="/tags/resources/create" hx-target="#result">
+                    <div class="row">
+                        <label>서비스<input type="text" name="service" th:value="${service}"></label>
+                        <label class="check"><input type="checkbox" name="updateIfExists" value="true"> updateIfExists</label>
+                    </div>
+                    <label>리소스<input type="text" name="resource" value="database=sales; table=orders; column=card_number"></label>
+                    <div class="actions"><button>createResource</button></div>
+                </form>
+                <form class="stack" hx-post="/tags/resources/delete" hx-target="#result" hx-confirm="이 서비스 리소스를 삭제할까요?" style="margin-top: 12px">
+                    <div class="row">
+                        <label>리소스 id<input name="id" type="number"></label>
+                        <button class="danger">deleteResource</button>
+                    </div>
+                </form>
+            </section>
+        </div>
+    </div>
+    <section th:replace="~{fragments :: trace}"></section>
+</main>
+<aside class="help" th:replace="~{help/tags :: help}"></aside>
+</div>
+</body>
+</html>

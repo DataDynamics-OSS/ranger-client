@@ -207,6 +207,11 @@ public final class SpecLoader {
     @SuppressWarnings("unchecked")
     private static Map<String, Object> item(Map<String, Object> raw) {
         Map<String, Object> i = camelKeys(raw);
+        for (String k : new String[] {"dataMaskInfo", "rowFilterInfo"}) {
+            if (i.get(k) instanceof Map) {
+                i.put(k, camelKeys((Map<String, Object>) i.get(k))); // data_mask_type, filter_expr, ...
+            }
+        }
         if (i.get("accesses") instanceof List) {
             List<Object> acc = new ArrayList<>();
             for (Object a : (List<Object>) i.get("accesses")) {

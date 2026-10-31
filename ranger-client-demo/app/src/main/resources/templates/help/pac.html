@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ko">
+<body>
+<aside class="help" th:fragment="help">
+    <div th:replace="~{fragments :: helpTitle('Policy as Code', '정책을 YAML 문서로 관리하고, 서버와의 차이를 미리 본 뒤 반영합니다.')}"></div>
+
+    <h3>Policy as Code란?</h3>
+    <p>Ranger 화면에서 정책을 손으로 고치면 누가 언제 무엇을 바꿨는지 남지 않고, 환경(개발·운영) 사이에 옮기기도 어렵습니다.
+        <span class="term">Policy as Code</span>는 정책을 Git에 둘 수 있는 <b>문서</b>로 적고, 도구가 서버를 그 문서와 같게 맞추는 방식입니다.</p>
+    <pre class="diagram">YAML 스펙 ──parse──▶ PolicySet
+                        │
+   Ranger 서버 ──읽기──▶ plan  ─▶ 변경 목록 (CREATE / UPDATE / DELETE)
+                        │
+                      apply ─▶ 바뀐 것만 쓰기</pre>
+
+    <h3>plan과 apply</h3>
+    <ul>
+        <li><b>plan</b>은 아무것도 바꾸지 않습니다. 양쪽을 정규화(서버가 붙인 id·버전 같은 필드 제거, 기본값 채우기, 순서 없는 목록 정렬)한 뒤
+            비교해 바뀔 정책·역할과 필드별 차이를 보여 줍니다.</li>
+        <li><b>apply</b>는 다시 plan을 만들고(그 사이 서버가 바뀌었을 수 있으므로) 그 변경을 실행합니다. 역할을 먼저, 정책을 나중에 씁니다.
+            정책은 plan했을 때의 버전으로 고치므로, 그 사이 누가 고친 정책은 <code>RangerConflictException</code>으로 실패합니다.</li>
+    </ul>
+
+    <h3>스펙 문서의 키</h3>
+    <table>
+        <thead><tr><th>키</th><th>뜻</th></tr></thead>
+        <tbody>
+        <tr><td><code>service</code> / <code>zone</code></td><td>정책이 속할 서비스와 보안 영역</td></tr>
+        <tr><td><code>prune</code></td><td>true면 문서에 없는 서버 정책을 지웁니다.</td></tr>
+        <tr><td><code>managed_label</code></td><td>prune은 이 레이블이 붙은 정책만 지웁니다. 손으로 만든 정책은 건드리지 않습니다.</td></tr>
+        <tr><td><code>roles</code></td><td>역할(사용자·그룹 묶음)</td></tr>
+        <tr><td><code>policies</code></td><td>정책 목록. <code>allow</code>/<code>deny</code>는 항목 목록의 줄임말입니다.</td></tr>
+        </tbody>
+    </table>
+    <p>키는 snake_case(<code>data_mask_info</code>)와 Ranger JSON의 camelCase(<code>dataMaskInfo</code>)를 모두 받습니다.</p>
+
+    <h3>이 화면 사용법</h3>
+    <ul>
+        <li>편집기에서 YAML을 고치고 <b>plan</b>을 누르면 오른쪽에 변경 목록이 나옵니다. 필드 이름을 펼치면 변경 전·후 JSON이 보입니다.</li>
+        <li><b>apply</b>는 실제로 Ranger를 바꿉니다. 확인 대화상자가 뜹니다.</li>
+        <li><b>Export</b>는 서버의 정책을 스펙으로 내보냅니다. <b>편집기에 넣기</b>로 바로 plan해 볼 수 있습니다.</li>
+    </ul>
+
+    <h3>따라 해 보기</h3>
+    <ol>
+        <li>아무것도 고치지 않고 <b>plan</b>: 시드가 이미 적용되어 있으므로 "서버가 이미 스펙과 같습니다"가 나옵니다(모두 NOOP).</li>
+        <li><code>sales_read</code>의 <code>deny</code>에서 <code>mallory</code>를 <code>bob</code>으로 바꾸고 <b>plan</b>:
+            <code>UPDATE</code> 한 건과 <code>denyPolicyItems</code> 필드 차이가 보입니다.</li>
+        <li><code>orders_region_filter</code> 정책 전체를 지우고 <b>plan</b>: <code>prune: true</code>이고 레이블이 <code>demo-seed</code>이므로 <code>DELETE</code>가 나옵니다.</li>
+        <li>되돌리려면 페이지를 새로 고치세요(편집기가 시드 문서로 돌아갑니다). apply하지 않았다면 서버는 그대로입니다.</li>
+    </ol>
+    <div class="warn">apply로 시드 정책을 바꾸면 <a th:href="@{/pdp}">PDP 권한 확인</a>의 결과도 달라집니다. 원래 문서로 다시 apply하면 돌아옵니다.</div>
+
+    <h3>이 화면이 쓰는 API</h3>
+    <pre class="code" data-lang="java">PolicyAsCode pac = new PolicyAsCode(admin);
+
+PolicySet spec = SpecLoader.parseYaml(yaml, "editor.yaml");
+// 파일·디렉터리에서: SpecLoader.load(List.of(Path.of("policies/")))
+
+Plan plan = pac.plan(List.of(spec));        // 바꾸지 않음
+System.out.println(plan.render());          // 사람이 읽는 요약
+Map&lt;Change.Action, Integer&gt; n = plan.summary();
+
+List&lt;Change&gt; applied = pac.apply(plan);     // 바뀐 것만 쓰기
+
+String yaml = PolicyAsCode.toYaml(pac.export("demo_hive", null));</pre>
+</aside>
+</body>
+</html>

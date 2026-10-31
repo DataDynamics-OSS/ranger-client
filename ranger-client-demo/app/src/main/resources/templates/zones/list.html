@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ko">
+<head th:replace="~{fragments :: head('보안 영역')}"></head>
+<body>
+<header th:replace="~{fragments :: nav('zones')}"></header>
+<div class="layout">
+<main>
+    <h1>보안 영역</h1>
+    <p class="lead">보안 영역(security zone)은 서비스의 리소스 일부를 떼어 내어 따로 정책과 관리자를 두게 합니다. SDK는 v2 영역 API
+        (<code>Feature.ZONES_V2</code>로 감지)를 쓰며, 영역 전체를 다시 보내지 않고 일부만 바꾸는 부분 수정도 지원합니다.</p>
+
+    <section id="list" class="panel" th:attr="hx-get=${self}" hx-trigger="refresh from:body" hx-select="#list" hx-swap="outerHTML">
+        <div th:replace="~{fragments/call :: panel(${headers})}"></div>
+        <div th:replace="~{fragments/call :: panel(${list})}"></div>
+        <table>
+            <thead><tr><th>id</th><th>이름</th><th>서비스와 리소스</th><th>태그 서비스</th><th>관리자</th><th>감사자</th></tr></thead>
+            <tbody>
+            <tr th:each="z : ${zones}">
+                <td th:text="${z.getId()}"></td>
+                <td><a th:href="@{/zones/{n}(n=${z.getName()})}" th:text="${z.getName()}"></a></td>
+                <td class="small">
+                    <div th:each="s : ${z.getServices()}">
+                        <strong th:text="${s.key}"></strong>:
+                        <span th:each="r : ${s.value.getResources()}" class="badge" th:text="${r.getResource()}"></span>
+                    </div>
+                </td>
+                <td><span class="badge" th:each="t : ${z.getTagServices()}" th:text="${t}"></span></td>
+                <td><span class="badge" th:each="p : ${z.getAdmins()}" th:text="${p.getType()} + ':' + ${p.getName()}"></span></td>
+                <td><span class="badge" th:each="p : ${z.getAuditors()}" th:text="${p.getType()} + ':' + ${p.getName()}"></span></td>
+            </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <h2>동작</h2>
+    <div id="result"></div>
+    <div class="grid2">
+        <section class="panel">
+            <h3>영역 만들기</h3>
+            <p class="muted small">리소스 하나는 한 영역에만 속할 수 있습니다. <code>database=finance</code>를 다시 쓰면 검증 오류가 납니다.</p>
+            <form class="stack" hx-post="/zones/create" hx-target="#result">
+                <div class="row">
+                    <label>이름<input type="text" name="name" value="sdk_demo_marketing"></label>
+                    <label>설명<input type="text" name="description" value="Created from the SDK demo"></label>
+                    <label>관리자·감사자 사용자<input type="text" name="adminUser" value="admin"></label>
+                </div>
+                <div class="row">
+                    <label>서비스<input type="text" name="service" value="demo_hive"></label>
+                    <label>리소스<input type="text" name="resource" value="database=marketing"></label>
+                    <label>태그 서비스<input type="text" name="tagService" value=""></label>
+                </div>
+                <div class="actions"><button>create</button></div>
+            </form>
+            <form class="stack" hx-post="/zones/delete-by-name" hx-target="#result" style="margin-top: 12px"
+                  hx-confirm="이 영역(과 그 안의 정책)을 삭제할까요?">
+                <div class="row">
+                    <label>이름<input type="text" name="name" value="sdk_demo_marketing"></label>
+                    <button class="danger">deleteByName</button>
+                </div>
+            </form>
+        </section>
+        <section class="panel">
+            <h3>부분 수정</h3>
+            <p class="muted small">채운 칸만 담은 <code>SecurityZoneChangeRequest</code>를 보냅니다.</p>
+            <form class="stack" hx-post="/zones/partial" hx-target="#result">
+                <div class="row">
+                    <label>영역<input type="text" name="zone" value="finance"></label>
+                    <label>서비스<input type="text" name="service" value="demo_hive"></label>
+                    <label>리소스<input type="text" name="resource" value="database=finance_archive"></label>
+                </div>
+                <div class="row">
+                    <label>리소스 변경
+                        <select name="resourceOp"><option value="add">resourcesToUpdate (추가)</option><option value="remove">resourcesToRemove (제거)</option></select>
+                    </label>
+                    <label>관리자 추가<input type="text" name="addAdmin" value=""></label>
+                    <label>관리자 제거<input type="text" name="removeAdmin" value=""></label>
+                </div>
+                <label>태그 서비스 추가<input type="text" name="addTagService" value=""></label>
+                <div class="actions"><button>updatePartial</button></div>
+            </form>
+        </section>
+    </div>
+    <section th:replace="~{fragments :: trace}"></section>
+</main>
+<aside class="help" th:replace="~{help/zones-list :: help}"></aside>
+</div>
+</body>
+</html>

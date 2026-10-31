@@ -214,6 +214,29 @@ class TransportTest {
     }
 
     @Test
+    void interceptorsSeeRequestAndResponseBodies() {
+        List<String> events = new ArrayList<>();
+        RequestInterceptor bodies = (server, method, uri, attempt, id, header) -> new RequestInterceptor.Attempt() {
+            @Override
+            public void onRequestBody(String contentType, byte[] body) {
+                events.add("request " + contentType + " " + new String(body, java.nio.charset.StandardCharsets.UTF_8));
+            }
+
+            @Override
+            public void onResponse(int status, byte[] body) {
+                events.add("response " + status + " " + new String(body, java.nio.charset.StandardCharsets.UTF_8));
+            }
+        };
+        try (MockServer s = new MockServer()) {
+            s.enqueue(Reply.of(200, "{\"id\":1}")).enqueue(Reply.of(200, "{}"));
+            Transport t = TestClient.admin(s.url()).interceptor(bodies).build();
+            t.send(HttpCall.post("/x").body("{\"a\":1}".getBytes(java.nio.charset.StandardCharsets.UTF_8), "application/json"));
+            t.send(HttpCall.get("/y"));
+        }
+        assertEquals(List.of("request application/json {\"a\":1}", "response 200 {\"id\":1}", "response 200 {}"), events);
+    }
+
+    @Test
     void masking() {
         assertEquals("{\"password\":\"***\",\"name\":\"n\"}", Masking.body("{\"password\":\"p\",\"name\":\"n\"}"));
         assertEquals("***", Masking.headers(Map.of("Authorization", "Basic x")).get("Authorization"));

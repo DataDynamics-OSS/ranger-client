@@ -2,8 +2,11 @@ package io.datadynamics.ranger.client.kms;
 
 import io.datadynamics.ranger.client.core.AbstractClientBuilder;
 import io.datadynamics.ranger.client.core.AbstractRangerClient;
+import io.datadynamics.ranger.client.core.RangerException.ErrorContext;
+import io.datadynamics.ranger.client.core.RangerNotFoundException;
 import io.datadynamics.ranger.client.core.ServerKind;
 import io.datadynamics.ranger.client.core.http.HttpCall;
+import io.datadynamics.ranger.client.core.http.HttpResult;
 import io.datadynamics.ranger.client.core.http.Transport;
 import io.datadynamics.ranger.client.model.EncryptedKeyVersion;
 import io.datadynamics.ranger.client.model.KeyMetadata;
@@ -64,7 +67,7 @@ public final class RangerKmsClient extends AbstractRangerClient<RangerKmsClient>
     }
 
     public KeyMetadata metadata(String name) {
-        return transport.send(HttpCall.get(V1 + "/key/" + seg(name) + "/_metadata")).as(KeyMetadata.class);
+        return existing(HttpCall.get(V1 + "/key/" + seg(name) + "/_metadata"), "key " + name).as(KeyMetadata.class);
     }
 
     public List<KeyMetadata> metadata(Collection<String> names) {
@@ -73,16 +76,30 @@ public final class RangerKmsClient extends AbstractRangerClient<RangerKmsClient>
     }
 
     public KeyVersion currentVersion(String name) {
-        return transport.send(HttpCall.get(V1 + "/key/" + seg(name) + "/_currentversion")).as(KeyVersion.class);
+        return existing(HttpCall.get(V1 + "/key/" + seg(name) + "/_currentversion"), "key " + name).as(KeyVersion.class);
     }
 
     public List<KeyVersion> versions(String name) {
-        return transport.send(HttpCall.get(V1 + "/key/" + seg(name) + "/_versions")).as(new TypeReference<List<KeyVersion>>() {
+        return existing(HttpCall.get(V1 + "/key/" + seg(name) + "/_versions"), "key " + name).as(new TypeReference<List<KeyVersion>>() {
         });
     }
 
     public KeyVersion keyVersion(String versionName) {
-        return transport.send(HttpCall.get(V1 + "/keyversion/" + seg(versionName))).as(KeyVersion.class);
+        return existing(HttpCall.get(V1 + "/keyversion/" + seg(versionName)), "key version " + versionName).as(KeyVersion.class);
+    }
+
+    /**
+     * Sends a lookup and raises {@link RangerNotFoundException} for an empty answer: KMS reports an unknown key
+     * or key version as {@code 200 {}} (or {@code []} for its versions) rather than 404.
+     */
+    private HttpResult existing(HttpCall call, String what) {
+        HttpResult r = transport.send(call);
+        String body = r.text().trim();
+        if (body.isEmpty() || body.replaceAll("\\s", "").equals("{}") || body.replaceAll("\\s", "").equals("[]")) {
+            throw new RangerNotFoundException("Not found: " + what,
+                    new ErrorContext(r.status(), call.method(), call.path(), null, null, body, null));
+        }
+        return r;
     }
 
     public List<String> names() {

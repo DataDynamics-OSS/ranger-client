@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ko">
+<head th:replace="~{fragments :: head(${def != null} ? ${def.getName()} : '서비스 정의')}"></head>
+<body>
+<header th:replace="~{fragments :: nav('servicedefs')}"></header>
+<div class="layout">
+<main>
+    <p class="small"><a th:href="@{/servicedefs}">&larr; 서비스 정의</a></p>
+    <h1 th:text="${def != null} ? ${def.getName()} : '서비스 정의'"></h1>
+    <p class="lead"><code th:text="${def != null} ? ${def.getName()} : ''"></code> 정책에 쓸 수 있는 것들입니다: 리소스(부모 관계 포함),
+        권한, 마스킹을 지원하는 타입이면 마스킹 종류. 중첩된 부분은 SDK 모델에서 맵으로 보관합니다.</p>
+    <div th:replace="~{fragments/call :: panel(${get})}"></div>
+
+    <th:block th:if="${def != null}">
+        <p><a th:href="@{/services(type=${def.getName()})}">이 타입의 서비스 &rarr;</a></p>
+        <div class="grid2">
+            <section class="panel">
+                <h3>리소스</h3>
+                <table>
+                    <thead><tr><th>level</th><th>이름</th><th>부모</th><th>필수</th><th>recursive</th><th>excludes</th></tr></thead>
+                    <tbody>
+                    <tr th:each="r : ${def.getResources()}">
+                        <td th:text="${r['level']}"></td>
+                        <td><code th:text="${r['name']}"></code></td>
+                        <td th:text="${r['parent']}"></td>
+                        <td th:text="${r['mandatory']}"></td>
+                        <td th:text="${r['recursiveSupported']}"></td>
+                        <td th:text="${r['excludesSupported']}"></td>
+                    </tr>
+                    </tbody>
+                </table>
+            </section>
+            <section class="panel">
+                <h3>권한 (access types)</h3>
+                <table>
+                    <thead><tr><th>이름</th><th>레이블</th><th>분류</th><th>포함하는 권한</th></tr></thead>
+                    <tbody>
+                    <tr th:each="a : ${def.getAccessTypes()}">
+                        <td><code th:text="${a['name']}"></code></td>
+                        <td th:text="${a['label']}"></td>
+                        <td th:text="${a['category']}"></td>
+                        <td class="small" th:text="${a['impliedGrants'] != null} ? ${#strings.listJoin(a['impliedGrants'], ', ')} : ''"></td>
+                    </tr>
+                    </tbody>
+                </table>
+            </section>
+        </div>
+        <div class="grid2">
+            <section class="panel" th:if="${def.getDataMaskDef() != null and def.getDataMaskDef()['maskTypes'] != null}">
+                <h3>마스킹 종류</h3>
+                <table>
+                    <thead><tr><th>이름</th><th>레이블</th><th>변환식</th></tr></thead>
+                    <tbody>
+                    <tr th:each="m : ${def.getDataMaskDef()['maskTypes']}">
+                        <td><code th:text="${m['name']}"></code></td>
+                        <td th:text="${m['label']}"></td>
+                        <td class="small"><code th:text="${m['transformer']}"></code></td>
+                    </tr>
+                    </tbody>
+                </table>
+            </section>
+            <section class="panel">
+                <h3>서비스 설정 항목</h3>
+                <table>
+                    <thead><tr><th>이름</th><th>타입</th><th>필수</th></tr></thead>
+                    <tbody>
+                    <tr th:each="c : ${def.getConfigs()}">
+                        <td><code th:text="${c['name']}"></code></td>
+                        <td th:text="${c['type']}"></td>
+                        <td th:text="${c['mandatory']}"></td>
+                    </tr>
+                    </tbody>
+                </table>
+            </section>
+        </div>
+        <section class="panel">
+            <details><summary>원본 JSON</summary><pre class="code" data-lang="json" th:text="${@json.pretty(def)}"></pre></details>
+        </section>
+    </th:block>
+    <section th:replace="~{fragments :: trace}"></section>
+</main>
+<aside class="help" th:replace="~{help/servicedefs-detail :: help}"></aside>
+</div>
+</body>
+</html>

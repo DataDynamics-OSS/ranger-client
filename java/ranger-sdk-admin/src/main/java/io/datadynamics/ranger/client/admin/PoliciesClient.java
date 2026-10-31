@@ -172,7 +172,9 @@ public final class PoliciesClient extends Resource {
     /** Bulk export ({@code exportJson}): {@code {"metaDataInfo": ..., "policies": [...]}}. */
     @SuppressWarnings("unchecked")
     public Map<String, Object> exportJson(Collection<String> services, String zone) {
+        // Ranger answers this endpoint with Content-Type text/json and 406 to "Accept: application/json" alone.
         HttpResult r = transport.send(HttpCall.get(PLUGINS + "/policies/exportJson")
+                .header("Accept", "application/json, text/json")
                 .query("serviceName", services == null ? null : String.join(",", services))
                 .query("zoneName", zone).query("checkPoliciesExists", false));
         return r.isEmpty() ? Map.of("policies", List.of()) : RangerJson.read(r.body(), Map.class);

@@ -2,8 +2,6 @@ package io.datadynamics.ranger.client.admin;
 
 import io.datadynamics.ranger.client.core.Capabilities;
 import io.datadynamics.ranger.client.core.Paging;
-import io.datadynamics.ranger.client.core.RangerException.ErrorContext;
-import io.datadynamics.ranger.client.core.RangerNotFoundException;
 import io.datadynamics.ranger.client.core.RangerValidationException;
 import io.datadynamics.ranger.client.core.http.HttpCall;
 import io.datadynamics.ranger.client.core.http.Transport;
@@ -30,13 +28,17 @@ public final class RolesClient extends Resource {
         try {
             return one(HttpCall.get(API + "/roles/name/" + seg(name)), RangerRole.class);
         } catch (RangerValidationException e) {
-            // Ranger 2.x answers an unknown role name with 400 "Role with name: x does not exist".
+            // Ranger 2.x answers an unknown role name with 400: "Role with name: x does not exist", or (2.9)
+            // "User doesn't have permissions to get details for x". The latter is also a genuine permission
+            // error, so it means "not found" only when the role is absent from the role names.
             String msg = e.getServerMessage();
-            if (msg == null || !msg.contains("does not exist")) {
-                throw e;
+            if (msg != null && msg.contains("does not exist")) {
+                throw notFound(e);
             }
-            throw new RangerNotFoundException("Not found: " + msg, new ErrorContext(e.getStatus(), e.getMethod(), e.getPath(),
-                    e.getServer(), e.getRequestId(), e.getBody(), msg), e);
+            if (msg != null && msg.contains("have permissions to get details for") && !names().contains(name)) {
+                throw notFound(e);
+            }
+            throw e;
         }
     }
 
@@ -88,7 +90,16 @@ public final class RolesClient extends Resource {
     }
 
     public void deleteByName(String name, String execUser, String service) {
-        exec(HttpCall.delete(API + "/roles/name/" + seg(name)).query("execUser", execUser).query("serviceName", service));
+        try {
+            exec(HttpCall.delete(API + "/roles/name/" + seg(name)).query("execUser", execUser).query("serviceName", service));
+        } catch (RangerValidationException e) {
+            // Ranger 2.9: 400 "Validation failure: error code[4007], reason[No RangerRole found for name[x]]"
+            String msg = e.getServerMessage();
+            if (msg != null && msg.contains("No RangerRole found")) {
+                throw notFound(e);
+            }
+            throw e;
+        }
     }
 
     @SuppressWarnings("unchecked")

@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ko">
+<head th:replace="~{fragments :: head('사용자·그룹')}"></head>
+<body>
+<header th:replace="~{fragments :: nav('principals')}"></header>
+<div class="layout">
+<main>
+    <h1>사용자·그룹</h1>
+    <p class="lead">Ranger 내부 사용자 저장소(<code>/service/xusers</code>)입니다. 사용자와 그룹을 찾고 만들고 지우며, 그룹 구성원을 관리합니다.
+        정책, 역할, PDP 판단은 모두 여기서 주체를 찾습니다.</p>
+
+    <form class="panel form-row" method="get" th:action="@{/principals}">
+        <label>이름 포함<input type="text" name="q" th:value="${q}"></label>
+        <button type="submit">검색</button>
+    </form>
+
+    <section id="list" th:attr="hx-get=${self}" hx-trigger="refresh from:body" hx-select="#list" hx-swap="outerHTML">
+        <div class="grid2">
+            <section class="panel">
+                <h3>사용자</h3>
+                <div th:replace="~{fragments/call :: panel(${usersCall})}"></div>
+                <table>
+                    <thead><tr><th>id</th><th>이름</th><th>그룹</th><th>Ranger 권한</th><th>출처</th></tr></thead>
+                    <tbody>
+                    <tr th:each="u : ${users}">
+                        <td th:text="${u.getId()}"></td>
+                        <td th:text="${u.getName()}"></td>
+                        <td><span class="badge" th:each="g : ${u.getGroupNameList()}" th:text="${g}"></span></td>
+                        <td class="small" th:text="${#strings.listJoin(u.getUserRoleList(), ', ')}"></td>
+                        <td class="small" th:text="${u.getUserSource() == 0} ? '내부' : '외부'"></td>
+                    </tr>
+                    </tbody>
+                </table>
+            </section>
+            <section class="panel">
+                <h3>그룹</h3>
+                <div th:replace="~{fragments/call :: panel(${groupsCall})}"></div>
+                <table>
+                    <thead><tr><th>id</th><th>이름</th><th>설명</th></tr></thead>
+                    <tbody>
+                    <tr th:each="g : ${groups}">
+                        <td th:text="${g.getId()}"></td>
+                        <td th:text="${g.getName()}"></td>
+                        <td class="small" th:text="${g.getDescription()}"></td>
+                    </tr>
+                    </tbody>
+                </table>
+            </section>
+        </div>
+    </section>
+
+    <h2>동작</h2>
+    <div id="result"></div>
+    <div class="grid2">
+        <div>
+            <section class="panel">
+                <h3>사용자</h3>
+                <p class="muted small">Ranger는 영문자와 숫자를 섞은 8자 이상의 비밀번호를 요구합니다.</p>
+                <form class="stack" hx-post="/principals/users/create" hx-target="#result">
+                    <div class="row">
+                        <label>이름<input type="text" name="name" value="carol"></label>
+                        <label>이름(first name)<input type="text" name="firstName" value="Carol"></label>
+                        <label>비밀번호<input name="password" type="password" value="Demo1234!"></label>
+                    </div>
+                    <div class="row">
+                        <label>이메일<input type="text" name="email" value="carol@example.com"></label>
+                        <label>Ranger 권한
+                            <select name="role"><option>ROLE_USER</option><option>ROLE_ADMIN_AUDITOR</option><option>ROLE_SYS_ADMIN</option></select>
+                        </label>
+                        <button>create</button>
+                    </div>
+                </form>
+                <form class="stack" hx-post="/principals/users/find" hx-target="#result" style="margin-top: 12px">
+                    <div class="row">
+                        <label>사용자<input type="text" name="name" value="carol"></label>
+                        <label class="check"><input type="checkbox" name="force" value="true"> 강제 삭제(force)</label>
+                    </div>
+                    <div class="actions">
+                        <button>find</button>
+                        <button class="secondary" hx-post="/principals/users/groups" hx-target="#result">사용자의 그룹</button>
+                        <button class="danger" hx-post="/principals/users/delete" hx-target="#result"
+                                hx-confirm="이 사용자를 Ranger에서 삭제할까요?">deleteByName</button>
+                    </div>
+                </form>
+            </section>
+        </div>
+        <div>
+            <section class="panel">
+                <h3>그룹</h3>
+                <form class="stack" hx-post="/principals/groups/create" hx-target="#result">
+                    <div class="row">
+                        <label>이름<input type="text" name="name" value="auditor"></label>
+                        <label>설명<input type="text" name="description" value="Created from the SDK demo"></label>
+                    </div>
+                    <label class="check"><input type="checkbox" name="force" value="true"> 강제 삭제(force)</label>
+                    <div class="actions">
+                        <button>create</button>
+                        <button class="secondary" hx-post="/principals/groups/users" hx-target="#result">그룹의 사용자</button>
+                        <button class="danger" hx-post="/principals/groups/delete" hx-target="#result"
+                                hx-confirm="이 그룹을 Ranger에서 삭제할까요?">deleteByName</button>
+                    </div>
+                </form>
+            </section>
+            <section class="panel">
+                <h3>그룹 구성원</h3>
+                <form class="stack" hx-post="/principals/members" hx-target="#result">
+                    <div class="row">
+                        <label>그룹<input type="text" name="group" value="auditor"></label>
+                        <label>사용자<input type="text" name="user" value="carol"></label>
+                    </div>
+                    <div class="actions">
+                        <button name="op" value="add">addUser</button>
+                        <button name="op" value="remove" class="secondary">removeUser</button>
+                    </div>
+                </form>
+            </section>
+        </div>
+    </div>
+    <section th:replace="~{fragments :: trace}"></section>
+</main>
+<aside class="help" th:replace="~{help/principals :: help}"></aside>
+</div>
+</body>
+</html>

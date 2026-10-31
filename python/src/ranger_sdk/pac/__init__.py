@@ -306,10 +306,12 @@ class PolicyAsCode:
     @flow
     def apply(self, plan: Plan) -> Flow[List[Change]]:
         """Execute a plan. Updates carry the version seen at plan time, so a policy
-        changed on the server in between fails with ``RangerConflictException``."""
+        changed on the server in between fails with ``RangerConflictException``.
+        Role changes run first: Ranger rejects a policy that names a role which does not exist yet."""
         policies, roles = self._admin.policies, self._admin.roles
         done: List[Change] = []
-        for c in plan.pending:
+        ordered = [c for c in plan.pending if c.kind == "role"] + [c for c in plan.pending if c.kind != "role"]
+        for c in ordered:
             if c.kind == "policy":
                 if c.action == "create":
                     yield from Policies.create.flow(policies, c.desired)

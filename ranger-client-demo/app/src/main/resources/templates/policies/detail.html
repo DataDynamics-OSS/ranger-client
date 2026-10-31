@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ko">
+<head th:replace="~{fragments :: head(${policy != null} ? ${policy.getName()} : '정책')}"></head>
+<body>
+<header th:replace="~{fragments :: nav('policies')}"></header>
+<div class="layout">
+<main>
+    <p class="small"><a th:href="@{/policies}">&larr; 정책</a></p>
+    <h1 th:text="${policy != null} ? ${policy.getName()} : '정책'">정책</h1>
+    <p class="lead">정책 하나를 SDK의 불변 모델 <code>RangerPolicy</code>로 읽었습니다. JSON을 고쳐 아래 쓰기 메서드 중 하나로 저장하세요.
+        서버가 보낸, 모델이 모르는 필드도 그대로 다시 보냅니다.</p>
+
+    <div th:replace="~{fragments/call :: panel(${get})}"></div>
+
+    <th:block th:if="${policy != null}">
+        <section class="panel">
+            <dl class="kv">
+                <dt>서비스</dt><dd><a th:href="@{/services/{n}(n=${policy.getService()})}" th:text="${policy.getService()}"></a></dd>
+                <dt>id / version</dt><dd th:text="|${policy.getId()} / ${policy.getVersion()}|"></dd>
+                <dt>보안 영역</dt><dd th:text="${policy.getZoneName()} ?: '-'"></dd>
+                <dt>레이블</dt><dd><span class="badge" th:each="l : ${policy.getPolicyLabels()}" th:text="${l}"></span></dd>
+            </dl>
+        </section>
+
+        <section class="panel">
+            <h3>항목</h3>
+            <table th:with="lists=${ { {'허용', policy.getPolicyItems()}, {'거부', policy.getDenyPolicyItems()},
+                    {'허용 예외', policy.getAllowExceptions()}, {'거부 예외', policy.getDenyExceptions()},
+                    {'마스킹', policy.getDataMaskPolicyItems()}, {'행 필터', policy.getRowFilterPolicyItems()} } }">
+                <thead><tr><th>목록</th><th>사용자</th><th>그룹</th><th>역할</th><th>권한</th><th>마스킹 / 필터</th></tr></thead>
+                <tbody>
+                <th:block th:each="l : ${lists}">
+                    <tr th:each="i : ${l[1]}">
+                        <td th:text="${l[0]}"></td>
+                        <td th:text="${#strings.listJoin(i.getUsers(), ', ')}"></td>
+                        <td th:text="${#strings.listJoin(i.getGroups(), ', ')}"></td>
+                        <td th:text="${#strings.listJoin(i.getRoles(), ', ')}"></td>
+                        <td><span class="badge" th:each="a : ${i.getAccesses()}" th:text="${a.getType()}"></span></td>
+                        <td class="small">
+                            <code th:if="${l[0] == '마스킹' and i.getDataMaskInfo() != null}" th:text="${i.getDataMaskInfo().getDataMaskType()}"></code>
+                            <code th:if="${l[0] == '행 필터' and i.getRowFilterInfo() != null}" th:text="${i.getRowFilterInfo().getFilterExpr()}"></code>
+                        </td>
+                    </tr>
+                </th:block>
+                </tbody>
+            </table>
+        </section>
+
+        <section class="panel">
+            <h3>JSON 고쳐 저장하기</h3>
+            <form class="stack" th:attr="hx-post=@{/policies/{id}/save(id=${policy.getId()})}" hx-target="#result">
+                <textarea name="json" rows="24" data-editor="json" th:text="${@json.pretty(policy)}"></textarea>
+                <div class="actions">
+                    <button name="mode" value="update">update (버전 확인)</button>
+                    <button name="mode" value="update-nocheck" class="secondary">update (확인 안 함)</button>
+                    <button name="mode" value="apply" class="secondary">apply</button>
+                    <button name="mode" value="server-apply" class="secondary">serverApply</button>
+                    <button name="mode" value="create" class="secondary">새 정책으로 create</button>
+                    <button class="danger" th:attr="hx-post=@{/policies/{id}/delete(id=${policy.getId()})}"
+                            hx-target="#result" hx-confirm="이 정책을 Ranger에서 삭제할까요?">delete</button>
+                </div>
+            </form>
+            <p class="muted small">새로 고치지 않고 <b>update (버전 확인)</b>를 두 번 눌러 보세요. 두 번째 저장은 낡은 <code>version</code>을
+                들고 있으므로, SDK가 현재 버전을 먼저 읽어 비교하고 첫 번째 저장을 덮어쓰는 대신 <code>RangerConflictException</code>(409)을 던집니다.</p>
+        </section>
+        <div id="result"></div>
+    </th:block>
+    <section th:replace="~{fragments :: trace}"></section>
+</main>
+<aside class="help" th:replace="~{help/policies-detail :: help}"></aside>
+</div>
+</body>
+</html>

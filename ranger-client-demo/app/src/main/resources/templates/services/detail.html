@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ko">
+<head th:replace="~{fragments :: head(${service != null} ? ${service.getName()} : '서비스')}"></head>
+<body>
+<header th:replace="~{fragments :: nav('services')}"></header>
+<div class="layout">
+<main>
+    <p class="small"><a th:href="@{/services}">&larr; 서비스</a></p>
+    <h1 th:text="${service != null} ? ${service.getName()} : '서비스'"></h1>
+    <p class="lead">서비스 하나를 <code>RangerService</code>로 읽었습니다. <code>configs</code>의 비밀번호는 가려진 값(<code>*****</code>)으로
+        오고, 수정할 때 그 값을 그대로 보내면 Ranger가 저장된 값을 유지합니다.</p>
+    <div th:replace="~{fragments/call :: panel(${get})}"></div>
+
+    <th:block th:if="${service != null}">
+        <p>
+            <a th:href="@{/policies(service=${service.getName()})}">이 서비스의 정책 &rarr;</a> ·
+            <a th:href="@{/servicedefs/{n}(n=${service.getType()})}">서비스 정의 <span th:text="${service.getType()}"></span> &rarr;</a>
+        </p>
+        <section class="panel">
+            <h3>JSON 고쳐 저장하기</h3>
+            <form class="stack" th:attr="hx-post=@{/services/{n}/save(n=${service.getName()})}" hx-target="#result">
+                <textarea name="json" rows="22" data-editor="json" th:text="${@json.pretty(service)}"></textarea>
+                <div class="actions">
+                    <button name="mode" value="update">update</button>
+                    <button name="mode" value="apply" class="secondary">apply</button>
+                    <button class="secondary" th:attr="hx-post=@{/services/{n}/test(n=${service.getName()})}" hx-target="#result">testConnection</button>
+                    <button class="danger" th:attr="hx-post=@{/services/{n}/delete(n=${service.getName()})}" hx-target="#result"
+                            hx-confirm="이 서비스와 그 정책 전부를 Ranger에서 삭제할까요?">delete</button>
+                </div>
+            </form>
+            <p class="muted small">데모 서비스는 존재하지 않는 호스트를 가리키므로, <code>testConnection</code>은 Ranger의 조회 실패를
+                데이터로 돌려줍니다(호출 자체는 성공).</p>
+        </section>
+        <div id="result"></div>
+    </th:block>
+    <section th:replace="~{fragments :: trace}"></section>
+</main>
+<aside class="help" th:replace="~{help/services-detail :: help}"></aside>
+</div>
+</body>
+</html>

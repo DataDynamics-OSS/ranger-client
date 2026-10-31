@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ko">
+<body>
+<aside class="help" th:fragment="help">
+    <div th:replace="~{fragments :: helpTitle('서비스 상세', '서비스 하나를 JSON으로 고쳐 저장하고, 연결 테스트를 하고, 지웁니다.')}"></div>
+
+    <h3>주요 필드</h3>
+    <table>
+        <thead><tr><th>필드</th><th>뜻</th></tr></thead>
+        <tbody>
+        <tr><td><code>type</code></td><td>서비스 정의 이름(hive, hdfs …). 만든 뒤에는 바꿀 수 없습니다.</td></tr>
+        <tr><td><code>configs</code></td><td>Ranger가 리소스를 조회(lookup)할 때 쓰는 접속 정보</td></tr>
+        <tr><td><code>tagService</code></td><td>함께 평가할 태그 서비스</td></tr>
+        <tr><td><code>policyVersion</code></td><td>정책이 바뀔 때마다 올라갑니다. 플러그인은 이 값으로 새 정책이 있는지 압니다.</td></tr>
+        </tbody>
+    </table>
+
+    <h3>가려진 비밀번호</h3>
+    <p>Ranger는 <code>configs</code>의 비밀번호를 <code>*****</code>로 돌려줍니다. 이 값을 그대로 다시 보내면 Ranger는 저장된 비밀번호를
+        유지하므로, JSON의 다른 부분만 고쳐 저장해도 비밀번호가 바뀌지 않습니다.</p>
+
+    <h3>testConnection</h3>
+    <p>Ranger Admin이 configs로 실제 시스템에 접속해 리소스 조회가 되는지 봅니다. 결과는 예외가 아니라 맵으로 오므로,
+        접속에 실패해도 호출은 "성공"이고 결과 안에 실패 내용이 들어 있습니다.</p>
+
+    <h3>이 화면이 쓰는 API</h3>
+    <pre class="code" data-lang="java">RangerService svc = admin.services().getByName("demo_hive");
+admin.services().update(svc.toBuilder().description("changed").build());
+Map&lt;String, Object&gt; result = admin.services().testConnection(svc);
+admin.services().deleteByName("sdk_demo_hdfs");</pre>
+</aside>
+</body>
+</html>

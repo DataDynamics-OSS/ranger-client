@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ko">
+<body>
+<aside class="help" th:fragment="help">
+    <div th:replace="~{fragments :: helpTitle('역할 상세', '역할 하나를 JSON으로 고쳐 저장하거나 지웁니다.')}"></div>
+
+    <h3>JSON 모양</h3>
+    <pre class="code" data-lang="json">{
+  "name": "analysts",
+  "users":  [ { "name": "alice",   "isAdmin": false } ],
+  "groups": [ { "name": "analyst", "isAdmin": false } ],
+  "roles":  []
+}</pre>
+    <p>구성원 목록은 통째로 바뀝니다. 한 명을 빼려면 그 항목을 지우고 저장하세요.</p>
+
+    <h3>update와 apply</h3>
+    <ul>
+        <li><b>update</b>: id로 찾아 고칩니다. 없으면 <code>RangerNotFoundException</code>.</li>
+        <li><b>apply</b>: 이름으로 찾아 있으면 고치고 없으면 만듭니다. 이름을 바꿔 저장하면 새 역할이 생깁니다.</li>
+    </ul>
+    <div class="warn">정책이 쓰고 있는 역할은 Ranger가 삭제를 거부할 수 있습니다. 그때 오류 상자의 예외 타입과 서버 메시지를 확인하세요.</div>
+
+    <h3>이 화면이 쓰는 API</h3>
+    <pre class="code" data-lang="java">RangerRole role = admin.roles().getByName("analysts");
+RangerRole changed = role.toBuilder().description("changed").build();
+admin.roles().update(changed);
+admin.roles().delete(role.getId());</pre>
+</aside>
+</body>
+</html>

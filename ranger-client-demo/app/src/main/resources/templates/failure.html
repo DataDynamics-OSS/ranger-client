@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ko">
+<head th:replace="~{fragments :: head('오류')}"></head>
+<body>
+<header th:replace="~{fragments :: nav('')}"></header>
+<div class="layout">
+<main>
+    <h1>요청을 처리하지 못했습니다</h1>
+    <div th:replace="~{fragments :: alerts}"></div>
+    <p><a href="javascript:history.back()">뒤로</a></p>
+    <section th:replace="~{fragments :: trace}"></section>
+</main>
+<aside class="help" th:replace="~{help/failure :: help}"></aside>
+</div>
+</body>
+</html>

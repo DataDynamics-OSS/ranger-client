@@ -85,13 +85,13 @@ Spring Boot 4.x, Java 17+ 전용 모듈이다(나머지 SDK는 Java 11 유지).
 <dependency>
     <groupId>io.datadynamics.ranger.client</groupId>
     <artifactId>ranger-sdk-spring-boot-starter</artifactId>
-    <version>0.1.0</version>
+    <version>0.2.0</version>
 </dependency>
 <!-- Kerberos를 쓸 때만 -->
 <dependency>
     <groupId>io.datadynamics.ranger.client</groupId>
     <artifactId>ranger-sdk-auth-kerberos</artifactId>
-    <version>0.1.0</version>
+    <version>0.2.0</version>
 </dependency>
 ```
 
@@ -142,6 +142,7 @@ admin = RangerAdmin("https://ranger:6182", interceptors=[OpenTelemetryIntercepto
 - 각 시도에 그 span의 `traceparent`를 실어 보낸다(설정된 propagator 사용).
 - OTel Java agent의 JDK HttpClient 계측이나 `opentelemetry-instrumentation-httpx`와 함께 쓰면 같은 요청이 두 번 기록되므로 하나만 쓴다.
 - 기반은 core의 `RequestInterceptor`(Java) / `interceptors`(Python) 훅으로, 시도마다 헤더를 추가하고 결과를 받는다. 다른 트레이서도 이 훅으로 붙일 수 있다.
+- 시도 객체는 요청·응답 본문도 받을 수 있다: Java는 `RequestInterceptor.Attempt`의 기본 메서드 `onRequestBody`, `onResponse(int, byte[])`, Python은 선택 메서드 `on_request_body(content_type, body)`, `on_response_body(status, body)`(`on_response` 직전에 호출). 본문에는 KMS 키 재료 같은 비밀이 들어 있을 수 있으니 그대로 로그에 남기지 말 것. 데모 앱의 요청 표가 이 훅을 쓴다.
 
 ## 공통 동작
 
@@ -195,6 +196,16 @@ rangerctl kms keys
 
 프로필: `~/.config/rangerctl/config.yaml` (또는 `$RANGERCTL_CONFIG`). 비밀값은 `password_env`, `password_file`, `token_env`, `token_file`, `token_command`로만 지정한다. 예시는 `python/src/ranger_sdk/cli/config.py` 참고.
 
+## 데모
+
+`ranger-client-demo/`에 Ranger 2.9.0 스택(Admin · KMS · PDP)과 SDK 기능을 직접 실행해 보는 Spring Boot 웹 UI가 있다. Docker만 있으면 된다.
+
+```bash
+cd ranger-client-demo && docker compose up -d --build --wait   # http://localhost:8080
+```
+
+자세한 내용은 [ranger-client-demo/README.md](ranger-client-demo/README.md).
+
 ## 빌드와 테스트
 
 ```bash
@@ -217,6 +228,15 @@ python3 tools/gen_java_models.py         # Java 모델 재생성
 - **Java `*Async` 메서드**는 executor 위에서 동기 호출을 실행한다 (진정한 non-blocking 아님).
 - **로깅**: 추가 의존성을 피하려고 SLF4J 대신 `System.Logger` 사용 (SLF4J/Log4j2 브리지로 연결 가능).
 - **Java TLS 호스트명 검증 해제**는 JDK HttpClient 제약상 JVM 전역 설정(`Tls.disableHostnameVerificationGlobally()`).
-- **Ranger 2.x 특이 동작 반영**: 존재하지 않는 role 이름 조회는 404가 아닌 400("Role with name: x does not exist")을 반환하므로 SDK가 `RangerNotFoundException`으로 변환한다.
+- **Ranger 2.x 특이 동작 반영**: 존재하지 않는 이름 조회에 404 대신 400을 반환하는 경우를 SDK가 `RangerNotFoundException`으로 변환한다(`find()`는 빈 값).
+  - role: 400 "Role with name: x does not exist". 2.9는 400 "User doesn't have permissions to get details for x"를 반환하므로, 이때는 `/roles/names`에 이름이 없을 때만 not found로 보고 있으면 원래 예외(권한 문제)를 그대로 던진다.
+  - user/group (`/xusers/.../userName|groupName/x`): 400 + `messageList[].name = DATA_NOT_FOUND` → 모든 요청에 공통 적용.
+  - security zone (`/zones-v2/name/x`): 400 "security-zone with name: x does not exist".
+  - role 이름으로 삭제: 400 "error code[4007], reason[No RangerRole found for name[x]]".
+  - tag / tagdef / service resource id 조회·삭제: 메시지 없는 400 `{"statusCode":400}`. 실제 실패(예: 리소스에 매핑된 태그 삭제)는 메시지가 있으므로 그대로 `RangerValidationException`.
+  - KMS: 없는 키의 `_metadata`·`_currentversion`·`keyversion`은 `200 {}`, `_versions`는 `200 []`. 삭제·rollover는 500 `RemoteException` "Key x does not exist" / "Can't find Metadata" → 서버 장애가 아니므로 재시도하지 않고 노드도 cooldown에 넣지 않는다.
+- **exportJson**: Ranger가 `Content-Type: text/json`으로 응답하고 `Accept: application/json`만 보내면 406이므로 `Accept: application/json, text/json`을 보낸다.
+- **PDP request id**: 요청 본문의 `requestId`를 `X-Request-Id` 헤더로도 보내 헤더·본문·결과·서버 로그가 같은 id를 갖는다.
+- **Policy as Code apply 순서**: role 변경을 먼저 적용한다(없는 role을 참조하는 정책은 Ranger가 거부). spec의 mask/row filter 항목 안쪽 키(`data_mask_info: {data_mask_type: ...}`)도 snake_case를 받는다.
 - **Spring Boot starter**는 Boot 4.x 전용(Actuator 헬스 API가 4.0에서 `spring-boot-health` 모듈로 이동). Boot 3.x 지원이 필요하면 별도 모듈이 필요하다.
 - 미구현: Audit API (P3), OpenAPI 생성. Kerberos는 실제 KDC 대상으로 검증하지 않았다.

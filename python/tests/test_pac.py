@@ -44,7 +44,9 @@ def test_plan_apply_converges(fake, tmp_path):
     pac = _pac()
     plan = pac.plan(specs)
     assert plan.summary() == {"create": 3, "update": 0, "delete": 0, "noop": 0}
-    pac.apply(plan)
+    applied = pac.apply(plan)
+    # roles first: Ranger rejects a policy naming a role that does not exist yet
+    assert [c.kind for c in applied] == ["role", "policy", "policy"]
     assert {p["name"] for p in fake.policies.values()} == {"sales_read", "hr_read"}
     again = pac.plan(specs)
     assert again.empty, again.render()

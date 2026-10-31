@@ -3,6 +3,7 @@ package io.datadynamics.ranger.client.admin;
 import io.datadynamics.ranger.client.core.Capabilities;
 import io.datadynamics.ranger.client.core.Feature;
 import io.datadynamics.ranger.client.core.Paging;
+import io.datadynamics.ranger.client.core.RangerValidationException;
 import io.datadynamics.ranger.client.core.http.HttpCall;
 import io.datadynamics.ranger.client.core.http.Transport;
 import io.datadynamics.ranger.client.model.RangerSecurityZone;
@@ -11,6 +12,7 @@ import io.datadynamics.ranger.client.model.SecurityZoneChangeRequest;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.stream.Stream;
 
 /** Security zones, v2 API ({@code /service/public/v2/api/zones-v2}). */
@@ -26,7 +28,21 @@ public final class ZonesClient extends Resource {
 
     public RangerSecurityZone getByName(String name) {
         capabilities.require(Feature.ZONES_V2);
-        return one(HttpCall.get(API + "/zones-v2/name/" + seg(name)), RangerSecurityZone.class);
+        try {
+            return one(HttpCall.get(API + "/zones-v2/name/" + seg(name)), RangerSecurityZone.class);
+        } catch (RangerValidationException e) {
+            // Ranger 2.x answers an unknown zone name with 400 "security-zone with name: x does not exist".
+            String msg = e.getServerMessage();
+            if (msg != null && msg.contains("does not exist")) {
+                throw notFound(e);
+            }
+            throw e;
+        }
+    }
+
+    /** Like {@link #getByName} but empty when the zone does not exist. */
+    public Optional<RangerSecurityZone> find(String name) {
+        return optional(() -> getByName(name));
     }
 
     public List<RangerSecurityZone> search(String name, Integer startIndex, Integer pageSize) {

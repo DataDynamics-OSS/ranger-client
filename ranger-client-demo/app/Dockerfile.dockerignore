@@ -1,0 +1,8 @@
+# Build context is the repository root; send only what the image build needs.
+*
+!spec/
+!java/
+!ranger-client-demo/app/pom.xml
+!ranger-client-demo/app/src/
+**/target/
+java/ranger-sdk-bundle/dependency-reduced-pom.xml

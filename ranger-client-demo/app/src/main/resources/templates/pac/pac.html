@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ko">
+<head th:replace="~{fragments :: head('Policy as Code')}"></head>
+<body>
+<header th:replace="~{fragments :: nav('pac')}"></header>
+<div class="layout">
+<main>
+    <h1>Policy as Code</h1>
+    <p class="lead">정책과 역할을 YAML 문서로 적어 두고, <code>ranger-sdk-policy-as-code</code>로 서버와 비교(<b>plan</b>)한 뒤
+        바뀐 것만 반영(<b>apply</b>)합니다. 편집기에는 데모가 시작할 때 시드로 적용한 문서가 들어 있습니다.</p>
+
+    <div class="grid2">
+        <section class="panel">
+            <h3>스펙 (YAML)</h3>
+            <form class="stack">
+                <textarea id="spec" name="yaml" rows="34" data-editor="yaml" spellcheck="false" th:text="${yaml}"></textarea>
+                <div class="actions">
+                    <button hx-post="/pac/plan" hx-target="#pac-result" hx-include="#spec">plan</button>
+                    <button class="danger" hx-post="/pac/apply" hx-target="#pac-result" hx-include="#spec"
+                            hx-confirm="이 스펙을 Ranger에 적용할까요? 정책을 만들고, 고치고, (prune이면) 지웁니다.">apply</button>
+                </div>
+            </form>
+        </section>
+        <section class="panel">
+            <h3>결과</h3>
+            <div id="pac-result"><p class="muted small">plan을 누르면 이 스펙이 서버에 어떤 변경을 만들지 보여 줍니다.</p></div>
+        </section>
+    </div>
+
+    <section class="panel">
+        <h3>Export</h3>
+        <p class="muted small">서버에 있는 서비스의 정책을 스펙 문서로 내보냅니다. 이미 운영 중인 서비스를 코드로 관리하기 시작할 때의 출발점입니다.</p>
+        <form class="stack" hx-post="/pac/export" hx-target="#export-result">
+            <div class="row">
+                <label>서비스<input type="text" name="service" th:value="${service}" required></label>
+                <label>보안 영역(선택)<input type="text" name="zone" placeholder="(없음)"></label>
+                <button type="submit">export</button>
+            </div>
+        </form>
+        <div id="export-result"></div>
+    </section>
+    <section th:replace="~{fragments :: trace}"></section>
+
+    <script>
+        // export 결과를 스펙 편집기에 넣습니다. 편집기가 Monaco로 바뀌었으면 Monaco에도 값을 씁니다.
+        function loadIntoEditor(id) {
+            const text = document.getElementById(id).value;
+            const spec = document.getElementById('spec');
+            spec.value = text;
+            const editor = window.monaco && window.monaco.editor.getEditors()
+                .find(e => e.getContainerDomNode() === spec.nextElementSibling);
+            if (editor) editor.setValue(text);
+            spec.closest('section').scrollIntoView({behavior: 'smooth'});
+        }
+    </script>
+</main>
+<aside class="help" th:replace="~{help/pac :: help}"></aside>
+</div>
+
+<!--/* ===== htmx 응답 조각. 화면을 그릴 때는 빼고, 컨트롤러가 "pac/pac :: planResult"처럼 골라 쓸 때만 그립니다. ===== */-->
+<th:block th:if="${false}">
+
+<table th:fragment="changes(list)" class="changes">
+    <thead><tr><th>동작</th><th>대상</th><th>필드 (변경 전 → 변경 후)</th></tr></thead>
+    <tbody>
+    <tr th:each="ch : ${list}">
+        <td><b th:classappend="${ch.action().name() == 'NOOP'} ? 'plan-unchanged' : ('plan-' + ${#strings.toLowerCase(ch.action().name())})"
+               th:text="${ch.action()}"></b></td>
+        <td><code th:text="${ch.key()}"></code></td>
+        <td>
+            <span th:if="${#lists.isEmpty(ch.diff())}" class="muted small">차이 없음</span>
+            <details th:each="d : ${ch.diff()}">
+                <summary><code th:text="${d.field}"></code></summary>
+                <h4>변경 전</h4>
+                <pre class="code" data-lang="json" data-max-height="240" th:text="${d.before == null} ? '(없음)' : ${@json.pretty(d.before)}"></pre>
+                <h4>변경 후</h4>
+                <pre class="code" data-lang="json" data-max-height="240" th:text="${d.after == null} ? '(없음)' : ${@json.pretty(d.after)}"></pre>
+            </details>
+        </td>
+    </tr>
+    </tbody>
+</table>
+
+<div th:fragment="planResult">
+    <th:block th:if="${call != null and call.ok()}" th:with="plan=${call.result()}">
+        <p>
+            <span th:each="e : ${plan.summary()}" class="badge"
+                  th:classappend="${e.value == 0} ? '' : (${e.key.name() == 'CREATE'} ? 'ok' : (${e.key.name() == 'DELETE'} ? 'err' : (${e.key.name() == 'UPDATE'} ? 'warn' : '')))"
+                  th:text="${e.key} + ' ' + ${e.value}"></span>
+            <span th:if="${plan.isEmpty()}" class="muted">서버가 이미 스펙과 같습니다.</span>
+        </p>
+        <table th:replace="~{pac/pac :: changes(${plan.changes()})}"></table>
+        <details><summary class="small">plan.render()</summary><pre class="code" data-lang="text" th:text="${plan.render()}"></pre></details>
+    </th:block>
+    <section th:replace="~{fragments/call :: panel(${parse})}"></section>
+    <section th:replace="~{fragments/call :: panel(${call})}"></section>
+    <section th:replace="~{fragments :: actionTrace}"></section>
+</div>
+
+<div th:fragment="applyResult">
+    <th:block th:if="${call != null and call.ok()}">
+        <p th:if="${#lists.isEmpty(call.result())}" class="muted">적용할 것이 없습니다. 서버가 이미 스펙과 같습니다.</p>
+        <th:block th:unless="${#lists.isEmpty(call.result())}"><table th:replace="~{pac/pac :: changes(${call.result()})}"></table></th:block>
+    </th:block>
+    <section th:replace="~{fragments/call :: panel(${parse})}"></section>
+    <section th:replace="~{fragments/call :: panel(${plan})}"></section>
+    <section th:replace="~{fragments/call :: panel(${call})}"></section>
+    <section th:replace="~{fragments :: actionTrace}"></section>
+</div>
+
+<div th:fragment="exportResult">
+    <th:block th:if="${call.ok()}">
+        <textarea id="export-yaml" hidden th:text="${call.result()}"></textarea>
+        <pre class="code" data-lang="yaml" th:text="${call.result()}"></pre>
+        <p><button type="button" class="secondary" onclick="loadIntoEditor('export-yaml')">편집기에 넣기</button></p>
+    </th:block>
+    <section th:replace="~{fragments/call :: panel(${call})}"></section>
+    <section th:replace="~{fragments :: actionTrace}"></section>
+</div>
+</th:block>
+
+</body>
+</html>

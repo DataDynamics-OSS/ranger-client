@@ -12,6 +12,7 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple, Union
 from ranger_sdk._client import _AsyncBase, _SyncBase
 from ranger_sdk._flow import Flow, flow
 from ranger_sdk._transport import Request, RetryPolicy
+from ranger_sdk._transport.core import REQUEST_ID_HEADER
 from ranger_sdk.models import (
     AccessContext,
     AccessInfo,
@@ -120,7 +121,10 @@ class _PdpMixin:
             if hit is not None:
                 return hit
         # authorization calls are side-effect free, so they are retried like GETs
-        result = parse((yield Request("POST", path, json=body, idempotent=True)))
+        # the body's requestId doubles as X-Request-Id, so header, body and result carry the same id
+        rid = body.get("requestId") if isinstance(body, dict) else None
+        headers = {REQUEST_ID_HEADER: rid} if rid else None
+        result = parse((yield Request("POST", path, json=body, headers=headers, idempotent=True)))
         if key is not None:
             self._cache.put(key, result)  # type: ignore[union-attr]
         return result

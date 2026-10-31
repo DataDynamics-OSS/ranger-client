@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ko">
+<body>
+<aside class="help" th:fragment="help">
+    <div th:replace="~{fragments :: helpTitle('보안 영역 상세', '영역 하나와 서비스별 리소스를 읽고, JSON으로 고쳐 저장합니다.')}"></div>
+
+    <h3>영역의 구성</h3>
+    <table>
+        <thead><tr><th>필드</th><th>뜻</th></tr></thead>
+        <tbody>
+        <tr><td><code>services</code></td><td>서비스 이름 → 그 서비스에서 영역에 속한 리소스 목록</td></tr>
+        <tr><td><code>tagServices</code></td><td>영역에 연결된 태그 서비스</td></tr>
+        <tr><td><code>admins</code></td><td>영역 정책을 관리하는 주체(USER / GROUP / ROLE)</td></tr>
+        <tr><td><code>auditors</code></td><td>영역 감사 기록을 볼 수 있는 주체</td></tr>
+        </tbody>
+    </table>
+
+    <h3>update와 updatePartial</h3>
+    <ul>
+        <li><b>update</b>(이 화면): JSON 전체로 영역을 <b>바꿔 씁니다</b>. JSON에서 지운 리소스는 영역에서도 빠집니다.</li>
+        <li><b>updatePartial</b>(목록 화면): 바꿀 것만 보냅니다. 여러 사람이 동시에 고칠 때 서로 덮어쓰지 않습니다.</li>
+    </ul>
+    <div class="tip">위쪽 "이 영역의 정책" 링크는 정책 화면에서 <code>PolicyFilter.all().zone(…)</code>로 검색합니다.
+        시드 영역 <code>finance</code>에는 정책이 없으므로 빈 목록이 정상입니다.</div>
+
+    <h3>이 화면이 쓰는 API</h3>
+    <pre class="code" data-lang="java">RangerSecurityZone zone = admin.zones().getByName("finance");
+// 서비스별 리소스와 그 id
+List&lt;Map&lt;String, Object&gt;&gt; res = admin.zones().resources(zone.getId(), "demo_hive");
+
+admin.zones().update(zone.toBuilder().description("new").build());
+admin.zones().delete(zone.getId());</pre>
+</aside>
+</body>
+</html>

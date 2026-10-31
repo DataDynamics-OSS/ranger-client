@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ko">
+<head th:replace="~{fragments :: head('서비스')}"></head>
+<body>
+<header th:replace="~{fragments :: nav('services')}"></header>
+<div class="layout">
+<main>
+    <h1>서비스</h1>
+    <p class="lead">서비스 인스턴스(클러스터 구성 요소마다 하나)를 타입으로 찾고, <code>apply</code>로 이름 기준 upsert하고,
+        Ranger의 연결 테스트를 실행하고, 삭제합니다.</p>
+
+    <form class="panel form-row" method="get" th:action="@{/services}">
+        <label>타입<input type="text" name="type" th:value="${type}" placeholder="전체 (예: hive, kms, tag)"></label>
+        <button type="submit">검색</button>
+    </form>
+
+    <section id="list" class="panel" th:attr="hx-get=${self}" hx-trigger="refresh from:body" hx-select="#list" hx-swap="outerHTML">
+        <div th:replace="~{fragments/call :: panel(${list})}"></div>
+        <table>
+            <thead><tr><th>id</th><th>이름</th><th>타입</th><th>태그 서비스</th><th>활성</th><th>정책 버전</th><th>설명</th></tr></thead>
+            <tbody>
+            <tr th:each="s : ${services}">
+                <td th:text="${s.getId()}"></td>
+                <td><a th:href="@{/services/{n}(n=${s.getName()})}" th:text="${s.getName()}"></a></td>
+                <td><a th:href="@{/servicedefs/{n}(n=${s.getType()})}" th:text="${s.getType()}"></a></td>
+                <td th:text="${s.getTagService()}"></td>
+                <td><span class="badge" th:classappend="${s.isEnabled() == null or s.isEnabled()}" th:text="${s.isEnabled() == null or s.isEnabled()}"></span></td>
+                <td th:text="${s.getPolicyVersion()}"></td>
+                <td class="small" th:text="${s.getDescription()}"></td>
+            </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <h2>동작</h2>
+    <div id="result"></div>
+
+    <section class="panel">
+        <h3>만들거나 고치기</h3>
+        <p class="muted small"><code>apply</code>는 서비스를 만들거나, 같은 이름이 있으면 id를 유지한 채 고칩니다. 다시 실행해도 안전합니다.
+            새 서비스를 만들면 Ranger가 기본 정책도 함께 만듭니다.</p>
+        <form class="stack" hx-post="/services/apply" hx-target="#result">
+            <div class="row">
+                <label>이름<input type="text" name="name" value="sdk_demo_hdfs"></label>
+                <label>타입<input type="text" name="type" value="hdfs"></label>
+                <label>태그 서비스<input type="text" name="tagService" value="demo_tag"></label>
+                <label>설명<input type="text" name="description" value="Created from the SDK demo"></label>
+            </div>
+            <label>설정 (한 줄에 key=value 하나)
+                <textarea name="configs" rows="5">username=hdfs
+password=hdfs
+fs.default.name=hdfs://namenode.example:8020
+hadoop.security.authentication=simple
+hadoop.security.authorization=true</textarea></label>
+            <div class="actions"><button>apply</button></div>
+        </form>
+    </section>
+    <section th:replace="~{fragments :: trace}"></section>
+</main>
+<aside class="help" th:replace="~{help/services-list :: help}"></aside>
+</div>
+</body>
+</html>

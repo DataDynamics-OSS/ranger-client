@@ -26,6 +26,7 @@ import java.util.function.Consumer;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /** Runs spec/contract/scenarios.yaml (shared with python/tests/test_contract.py) against the Java SDK. */
@@ -47,12 +48,19 @@ class HttpContractTest {
             }
             String op = (String) sc.get("op");
             Map<String, Object> args = (Map<String, Object>) sc.get("args");
+            String version = (String) sc.get("server_version");
+            Consumer<AbstractClientBuilder<?, ?>> setup = b -> {
+                b.retry(RETRY);
+                if (version != null) {
+                    b.serverVersion(version);
+                }
+            };
             if (sc.containsKey("expect_error")) {
                 Class<? extends RangerException> type = (Class<? extends RangerException>)
                         Class.forName("io.datadynamics.ranger.client.core." + sc.get("expect_error"));
-                assertThrows(type, () -> invoke(op, args, server.url()));
+                assertThrows(type, () -> invoke(op, args, server.url(), setup));
             } else {
-                Object result = invoke(op, args, server.url());
+                Object result = invoke(op, args, server.url(), setup);
                 if (sc.containsKey("expect_result")) {
                     Spec.subset(sc.get("expect_result"), resultMap(result), "$");
                 }
@@ -76,12 +84,16 @@ class HttpContractTest {
                 if (exp.containsKey("body")) {
                     Spec.subset(exp.get("body"), Spec.JSON.readValue(req.body, Object.class), "body");
                 }
+                if (exp.containsKey("headers")) {
+                    ((Map<String, Object>) exp.get("headers")).forEach((k, v) -> assertEquals(v, req.header(k), "header " + k));
+                }
+                if (Boolean.TRUE.equals(exp.get("request_id_matches_body"))) {
+                    Object bodyId = Spec.JSON.readValue(req.body, Map.class).get("requestId");
+                    assertNotNull(bodyId);
+                    assertEquals(bodyId, req.header("X-Request-Id"));
+                }
             }
         }
-    }
-
-    private static Object invoke(String op, Map<String, Object> a, String url) {
-        return invoke(op, a, url, b -> b.retry(RETRY));
     }
 
     /** Run a contract op; {@code setup} configures whichever client builder the op needs. */
@@ -102,8 +114,16 @@ class HttpContractTest {
             RangerKmsClient.Builder kb = RangerKmsClient.builder().urls(url);
             setup.accept(kb);
             RangerKmsClient kms = kb.build();
-            if (op.equals("kms.metadata")) {
-                return kms.metadata((String) a.get("name"));
+            switch (op) {
+                case "kms.metadata":
+                    return kms.metadata((String) a.get("name"));
+                case "kms.versions":
+                    return kms.versions((String) a.get("name"));
+                case "kms.delete_key":
+                    kms.deleteKey((String) a.get("name"));
+                    return null;
+                default:
+                    throw new IllegalArgumentException("no Java mapping for contract op " + op);
             }
         }
         RangerAdminClient.Builder ab = RangerAdminClient.builder().urls(url);
@@ -125,6 +145,22 @@ class HttpContractTest {
                         .limit(((Number) a.get("page_size")).intValue())).items();
             case "roles.get_by_name":
                 return admin.roles().getByName((String) a.get("name"));
+            case "users.get_by_name":
+                return admin.users().getByName((String) a.get("name"));
+            case "groups.get_by_name":
+                return admin.groups().getByName((String) a.get("name"));
+            case "zones.get_by_name":
+                return admin.zones().getByName((String) a.get("name"));
+            case "roles.delete_by_name":
+                admin.roles().deleteByName((String) a.get("name"), null, null);
+                return null;
+            case "tags.get":
+                return admin.tags().get(((Number) a.get("id")).longValue());
+            case "tags.delete":
+                admin.tags().delete(((Number) a.get("id")).longValue());
+                return null;
+            case "policies.export_json":
+                return admin.policies().exportJson((List<String>) a.get("services"), null);
             case "roles.grant":
                 return admin.roles().grant((String) a.get("service"),
                         RangerJson.convert(a.get("request"), GrantRevokeRoleRequest.class));

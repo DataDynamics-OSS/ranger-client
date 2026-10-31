@@ -122,6 +122,59 @@ scenarios:
         body: {statusCode: 1, msgDesc: "Role with name: nope does not exist"}
     expect_error: RangerNotFoundException
 
+  # Ranger 2.9 answers GET /roles/name/<unknown> with 400 "User doesn't have permissions to get details for <name>".
+  # The SDK checks /roles/names: absent -> not found, present -> a genuine permission error.
+  - name: unknown role name answered as missing permission maps to RangerNotFoundException
+    op: roles.get_by_name
+    args: {name: nope}
+    responses:
+      - status: 400
+        body: {statusCode: 1, msgDesc: "User doesn't have permissions to get details for nope"}
+      - status: 200
+        body: [analysts]
+    expect_error: RangerNotFoundException
+    expect_request_count: 2
+
+  - name: missing permission on an existing role stays RangerValidationException
+    op: roles.get_by_name
+    args: {name: analysts}
+    responses:
+      - status: 400
+        body: {statusCode: 1, msgDesc: "User doesn't have permissions to get details for analysts"}
+      - status: 200
+        body: [analysts]
+    expect_error: RangerValidationException
+    expect_request_count: 2
+
+  - name: unknown user name (Ranger answers 400 DATA_NOT_FOUND) maps to RangerNotFoundException
+    op: users.get_by_name
+    args: {name: nope}
+    responses:
+      - status: 400
+        body: {statusCode: 1, msgDesc: "nope is Not Found",
+               messageList: [{name: DATA_NOT_FOUND, rbKey: xa.error.data_not_found, message: "Data not found"}]}
+    expect_request: {method: GET, path: /service/xusers/users/userName/nope}
+    expect_error: RangerNotFoundException
+
+  - name: unknown group name (Ranger answers 400 DATA_NOT_FOUND) maps to RangerNotFoundException
+    op: groups.get_by_name
+    args: {name: nope}
+    responses:
+      - status: 400
+        body: {statusCode: 1, msgDesc: "nope is Not Found",
+               messageList: [{name: DATA_NOT_FOUND, rbKey: xa.error.data_not_found, message: "Data not found"}]}
+    expect_error: RangerNotFoundException
+
+  - name: unknown zone name (Ranger answers 400) maps to RangerNotFoundException
+    op: zones.get_by_name
+    server_version: "2.9.0"     # skip the capability probe
+    args: {name: nope}
+    responses:
+      - status: 400
+        body: {statusCode: 1, msgDesc: "security-zone with name: nope does not exist"}
+    expect_request: {method: GET, path: /service/public/v2/api/zones-v2/name/nope}
+    expect_error: RangerNotFoundException
+
   - name: role grant
     op: roles.grant
     args: {service: cm_hive, request: {targetRoles: [r1], users: [alice], grantor: admin}}
@@ -166,3 +219,86 @@ scenarios:
         body: {name: key1, cipher: AES/CTR/NoPadding, length: 128, versions: 2}
     expect_request: {method: GET, path: /kms/v1/key/key1/_metadata}
     expect_result: {name: key1, versions: 2}
+
+  - name: pdp sends the body's requestId as X-Request-Id
+    op: pdp.authorize
+    args: {user: alice, service_type: hive, service: dev_hive, resource: [[database, sales]], access: select}
+    responses:
+      - status: 200
+        body: {decision: ALLOW}
+    expect_request:
+      method: POST
+      path: /authz/v1/authorize
+      request_id_matches_body: true
+
+  - name: policy exportJson accepts text/json (Ranger answers 406 to application/json alone)
+    op: policies.export_json
+    args: {services: [cm_hive]}
+    responses:
+      - status: 200
+        body: {policies: [{id: 1, name: p}]}
+    expect_request:
+      method: GET
+      path: /service/plugins/policies/exportJson
+      query: {serviceName: cm_hive}
+      headers: {Accept: "application/json, text/json"}
+
+  - name: unknown role deleted by name (Ranger answers 400 error code 4007) maps to RangerNotFoundException
+    op: roles.delete_by_name
+    args: {name: nope}
+    responses:
+      - status: 400
+        body: {statusCode: 1, msgDesc: "(0) Validation failure: error code[4007], reason[No RangerRole found for name[nope]], field[name], subfield[null], type[missing] "}
+    expect_error: RangerNotFoundException
+
+  - name: unknown tag id (Ranger answers a bare 400) maps to RangerNotFoundException
+    op: tags.get
+    args: {id: 999}
+    responses:
+      - status: 400
+        body: {statusCode: 400}
+    expect_error: RangerNotFoundException
+    expect_request: {method: GET, path: /service/tags/tag/999}
+
+  - name: deleting a tag still mapped to a resource stays RangerValidationException
+    op: tags.delete
+    args: {id: 1}
+    responses:
+      - status: 400
+        body: {statusCode: 400, msgDesc: "Attempt to delete tag which is associated with a service-resource, id=1"}
+    expect_error: RangerValidationException
+
+  - name: kms unknown key metadata (KMS answers 200 {}) maps to RangerNotFoundException
+    op: kms.metadata
+    args: {name: nope}
+    responses:
+      - status: 200
+        body: {}
+    expect_error: RangerNotFoundException
+
+  - name: kms unknown key versions (KMS answers 200 []) maps to RangerNotFoundException
+    op: kms.versions
+    args: {name: nope}
+    responses:
+      - status: 200
+        body: []
+    expect_error: RangerNotFoundException
+
+  - name: kms deleting an unknown key (500 RemoteException) maps to RangerNotFoundException without retry
+    op: kms.delete_key
+    args: {name: nope}
+    responses:
+      - status: 500
+        body: {RemoteException: {message: "Key nope does not exist", exception: IOException, javaClassName: java.io.IOException}}
+      - status: 204
+    expect_error: RangerNotFoundException
+    expect_request_count: 1
+
+  - name: kms server errors other than an unknown key are still retried
+    op: kms.delete_key
+    args: {name: k}
+    responses:
+      - status: 500
+        body: {RemoteException: {message: "Disk full", exception: IOException}}
+      - status: 200
+    expect_request_count: 2

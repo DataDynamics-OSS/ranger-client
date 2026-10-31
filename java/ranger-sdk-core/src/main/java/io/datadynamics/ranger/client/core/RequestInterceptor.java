@@ -20,8 +20,23 @@ public interface RequestInterceptor {
 
     /** Outcome of one attempt. */
     interface Attempt {
+        /**
+         * The body this attempt sends; called before the attempt is sent, and only when it has a body.
+         * The body may hold secrets (e.g. KMS key material), so do not log it blindly.
+         */
+        default void onRequestBody(String contentType, byte[] body) {
+        }
+
         /** The server answered (any status, including errors that will be retried). */
         default void onResponse(int status) {
+        }
+
+        /**
+         * Same as {@link #onResponse(int)}, with the response body as received (may hold secrets, like
+         * {@link #onRequestBody}). This is the method the SDK calls; by default it delegates to {@link #onResponse(int)}.
+         */
+        default void onResponse(int status, byte[] body) {
+            onResponse(status);
         }
 
         /** No response: connection failure, timeout, interruption. */

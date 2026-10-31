@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Ranger PDP 2.9.0 configuration for the SDK demo.
+  Based on conf.dist/ranger-pdp-site.xml of the 2.9.0 release; see that file for every property.
+
+  - Authentication: trusted header only (X-Forwarded-User). JWT and Kerberos are off.
+  - The demo app calls as "demo-app", a delegation user for every service, so it may ask for
+    decisions on behalf of any user.
+  - Policies are polled every 5 s so policy edits show up in decisions almost immediately.
+  - @RANGER_ADMIN_PASSWORD@ is replaced by entrypoint.sh.
+-->
+<configuration>
+  <property><name>ranger.pdp.port</name><value>6500</value></property>
+  <property><name>ranger.pdp.log.dir</name><value>/var/log/ranger/pdp</value></property>
+  <property><name>ranger.pdp.ssl.enabled</name><value>false</value></property>
+  <property><name>ranger.pdp.http2.enabled</name><value>true</value></property>
+
+  <property><name>ranger.pdp.service.*.delegation.users</name><value>demo-app</value></property>
+
+  <property><name>ranger.pdp.authn.types</name><value>header</value></property>
+  <property><name>ranger.pdp.authn.header.enabled</name><value>true</value></property>
+  <property><name>ranger.pdp.authn.header.username</name><value>X-Forwarded-User</value></property>
+  <property><name>ranger.pdp.authn.jwt.enabled</name><value>false</value></property>
+  <property><name>ranger.pdp.authn.kerberos.enabled</name><value>false</value></property>
+
+  <property><name>ranger.authz.app.type</name><value>ranger-pdp</value></property>
+  <!-- Services load lazily on first decision: demo_hive is created by the demo app after PDP starts. -->
+  <property><name>ranger.authz.init.services</name><value></value></property>
+  <property><name>ranger.authz.default.policy.source.impl</name><value>org.apache.ranger.admin.client.RangerAdminRESTClient</value></property>
+  <property><name>ranger.authz.default.policy.rest.url</name><value>http://ranger-admin:6080</value></property>
+  <property><name>ranger.authz.default.policy.rest.client.connection.timeoutMs</name><value>120000</value></property>
+  <property><name>ranger.authz.default.policy.rest.client.read.timeoutMs</name><value>30000</value></property>
+  <property><name>ranger.authz.default.policy.rest.client.username</name><value>admin</value></property>
+  <property><name>ranger.authz.default.policy.rest.client.password</name><value>@RANGER_ADMIN_PASSWORD@</value></property>
+  <property><name>ranger.authz.default.policy.pollIntervalMs</name><value>5000</value></property>
+  <property><name>ranger.authz.default.policy.cache.dir</name><value>/var/ranger/cache/pdp</value></property>
+  <property><name>ranger.authz.default.ugi.initialize</name><value>false</value></property>
+  <!-- Resolve the user's groups and roles from Ranger's user store, so a decision needs only the user name. -->
+  <property><name>ranger.authz.default.use.rangerGroups</name><value>true</value></property>
+
+  <property><name>ranger.authz.audit.is.enabled</name><value>true</value></property>
+  <property><name>ranger.authz.audit.destination.solr</name><value>true</value></property>
+  <property><name>ranger.authz.audit.destination.solr.urls</name><value>http://ranger-solr:8983/solr/ranger_audits</value></property>
+  <property><name>ranger.authz.audit.destination.hdfs</name><value>false</value></property>
+</configuration>

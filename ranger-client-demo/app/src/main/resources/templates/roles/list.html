@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ko">
+<head th:replace="~{fragments :: head('역할')}"></head>
+<body>
+<header th:replace="~{fragments :: nav('roles')}"></header>
+<div class="layout">
+<main>
+    <h1>역할</h1>
+    <p class="lead">역할은 사용자·그룹·다른 역할을 묶어 정책에서 한 번에 부를 수 있게 합니다. 검색, <code>apply</code>로 upsert,
+        플러그인이 보내는 방식의 <code>grant</code>/<code>revoke</code>, 사용자가 가진 역할 조회를 해 봅니다.</p>
+
+    <form class="panel form-row" method="get" th:action="@{/roles}">
+        <label>이름 포함<input type="text" name="name" th:value="${name}"></label>
+        <button type="submit">검색</button>
+    </form>
+
+    <section id="list" class="panel" th:attr="hx-get=${self}" hx-trigger="refresh from:body" hx-select="#list" hx-swap="outerHTML">
+        <div th:replace="~{fragments/call :: panel(${list})}"></div>
+        <table>
+            <thead><tr><th>id</th><th>이름</th><th>사용자 (★ = 역할 관리자)</th><th>그룹</th><th>역할</th><th>설명</th></tr></thead>
+            <tbody>
+            <tr th:each="r : ${roles}">
+                <td th:text="${r.getId()}"></td>
+                <td><a th:href="@{/roles/{n}(n=${r.getName()})}" th:text="${r.getName()}"></a></td>
+                <td><span class="badge" th:each="m : ${r.getUsers()}" th:text="${m.getName()} + (${m.isAdmin() != null and m.isAdmin()} ? ' ★' : '')"></span></td>
+                <td><span class="badge" th:each="m : ${r.getGroups()}" th:text="${m.getName()}"></span></td>
+                <td><span class="badge" th:each="m : ${r.getRoles()}" th:text="${m.getName()}"></span></td>
+                <td class="small" th:text="${r.getDescription()}"></td>
+            </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <h2>동작</h2>
+    <div id="result"></div>
+    <div class="grid2">
+        <div>
+            <section class="panel">
+                <h3>역할 만들기 또는 바꾸기</h3>
+                <p class="muted small">같은 이름의 역할이 있으면 구성원을 이 값으로 바꿉니다. 쉼표로 여러 값을 넣습니다.</p>
+                <form class="stack" hx-post="/roles/apply" hx-target="#result">
+                    <div class="row">
+                        <label>이름<input type="text" name="name" value="sdk_demo_auditors"></label>
+                        <label>설명<input type="text" name="description" value="Created from the SDK demo"></label>
+                        <label>사용자<input type="text" name="users" value="bob"></label>
+                    </div>
+                    <div class="row">
+                        <label>역할 관리자<input type="text" name="adminUsers" value="admin"></label>
+                        <label>그룹<input type="text" name="groups" value="engineer"></label>
+                        <label>역할<input type="text" name="roles" value=""></label>
+                    </div>
+                    <div class="actions"><button>apply</button></div>
+                </form>
+            </section>
+            <section class="panel">
+                <h3>이름으로 삭제</h3>
+                <form class="stack" hx-post="/roles/delete-by-name" hx-target="#result" hx-confirm="이 역할을 Ranger에서 삭제할까요?">
+                    <div class="row">
+                        <label>이름<input type="text" name="name" value="sdk_demo_auditors"></label>
+                        <button class="danger">deleteByName</button>
+                    </div>
+                </form>
+            </section>
+        </div>
+        <div>
+            <section class="panel">
+                <h3>Grant / revoke</h3>
+                <p class="muted small">Hive 플러그인이 <code>GRANT ROLE analysts TO USER bob</code>을 받았을 때 보내는 요청입니다.
+                    grantor는 대상 역할을 관리할 수 있어야 합니다(admin은 가능).</p>
+                <form class="stack" hx-post="/roles/grant" hx-target="#result">
+                    <div class="row">
+                        <label>서비스<input type="text" name="service" value="demo_hive"></label>
+                        <label>grantor<input type="text" name="grantor" value="admin"></label>
+                        <label>대상 역할<input type="text" name="targetRoles" value="analysts"></label>
+                    </div>
+                    <div class="row">
+                        <label>받을 사용자<input type="text" name="users" value="bob"></label>
+                        <label>받을 그룹<input type="text" name="groups" value=""></label>
+                        <label>받을 역할<input type="text" name="roles" value=""></label>
+                    </div>
+                    <label class="check"><input type="checkbox" name="grantOption" value="true"> admin option 포함</label>
+                    <div class="actions">
+                        <button name="op" value="grant">grant</button>
+                        <button name="op" value="revoke" class="secondary">revoke</button>
+                    </div>
+                </form>
+            </section>
+            <section class="panel">
+                <h3>조회</h3>
+                <form class="stack" hx-post="/roles/for-user" hx-target="#result">
+                    <div class="row">
+                        <label>사용자<input type="text" name="user" value="alice"></label>
+                        <button>forUser</button>
+                        <button class="secondary" hx-post="/roles/names" hx-target="#result">names()</button>
+                    </div>
+                </form>
+            </section>
+        </div>
+    </div>
+    <section th:replace="~{fragments :: trace}"></section>
+</main>
+<aside class="help" th:replace="~{help/roles-list :: help}"></aside>
+</div>
+</body>
+</html>

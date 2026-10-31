@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ko">
+<head th:replace="~{fragments :: head(${role != null} ? ${role.getName()} : '역할')}"></head>
+<body>
+<header th:replace="~{fragments :: nav('roles')}"></header>
+<div class="layout">
+<main>
+    <p class="small"><a th:href="@{/roles}">&larr; 역할</a></p>
+    <h1 th:text="${role != null} ? ${role.getName()} : '역할'"></h1>
+    <p class="lead">역할 하나를 <code>RangerRole</code>로 읽었습니다. 구성원은 관리자 여부(isAdmin)를 가진 <code>RoleMember</code>입니다.</p>
+    <div th:replace="~{fragments/call :: panel(${get})}"></div>
+    <th:block th:if="${role != null}">
+        <p><a th:href="@{/policies(service='',role=${role.getName()})}">이 역할이 들어간 정책 &rarr;</a></p>
+        <section class="panel">
+            <h3>JSON 고쳐 저장하기</h3>
+            <form class="stack" th:attr="hx-post=@{/roles/{n}/save(n=${role.getName()})}" hx-target="#result">
+                <textarea name="json" rows="20" data-editor="json" th:text="${@json.pretty(role)}"></textarea>
+                <div class="actions">
+                    <button name="mode" value="update">update</button>
+                    <button name="mode" value="apply" class="secondary">apply</button>
+                    <button class="danger" th:attr="hx-post=@{/roles/{id}/delete(id=${role.getId()})}" hx-target="#result"
+                            hx-confirm="이 역할을 Ranger에서 삭제할까요?">delete</button>
+                </div>
+            </form>
+        </section>
+        <div id="result"></div>
+    </th:block>
+    <section th:replace="~{fragments :: trace}"></section>
+</main>
+<aside class="help" th:replace="~{help/roles-detail :: help}"></aside>
+</div>
+</body>
+</html>

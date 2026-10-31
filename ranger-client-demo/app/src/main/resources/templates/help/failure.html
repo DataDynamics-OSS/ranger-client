@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ko">
+<body>
+<aside class="help" th:fragment="help">
+    <div th:replace="~{fragments :: helpTitle('오류', 'SDK가 던진 예외를 그대로 보여 줍니다.')}"></div>
+
+    <h3>SDK 예외 계층</h3>
+    <p>모든 SDK 예외는 <code>RangerException</code>(unchecked)을 상속합니다. HTTP 상태와 Ranger 응답에 따라 하위 타입이 정해지므로,
+        상태 코드를 직접 비교하지 않고 타입으로 처리할 수 있습니다.</p>
+    <table>
+        <thead><tr><th>예외</th><th>언제</th></tr></thead>
+        <tbody>
+        <tr><td><code>RangerNotFoundException</code></td><td>404, 또는 Ranger가 "없음"을 다른 상태로 알려 줄 때(KMS 500 "key does not exist" 등)</td></tr>
+        <tr><td><code>RangerConflictException</code></td><td>409, 이미 있는 이름, 버전 충돌</td></tr>
+        <tr><td><code>RangerValidationException</code></td><td>400, 잘못된 요청 본문</td></tr>
+        <tr><td><code>RangerAuthenticationException</code></td><td>401</td></tr>
+        <tr><td><code>RangerAccessDeniedException</code></td><td>403</td></tr>
+        <tr><td><code>RangerServerException</code></td><td>5xx (재시도 후에도 실패)</td></tr>
+        <tr><td><code>RangerTransportException</code></td><td>응답 없음: 연결 거부, 시간 초과</td></tr>
+        </tbody>
+    </table>
+
+    <h3>오류 상자 읽는 법</h3>
+    <ul>
+        <li>굵은 글씨: 예외 클래스 이름. 맨 아래 회색 글씨가 전체 이름입니다.</li>
+        <li><b>HTTP</b> 배지: Ranger가 돌려준 상태 코드(응답을 받았을 때만).</li>
+        <li><b>서버 메시지</b>: Ranger가 응답 본문에 담은 오류 메시지.</li>
+        <li><b>X-Request-Id</b>: SDK가 요청마다 붙이는 ID. Ranger 로그와 맞춰 볼 때 씁니다.</li>
+    </ul>
+
+    <h3>코드에서 처리하기</h3>
+    <pre class="code" data-lang="java">try {
+    admin.policies().getByName("demo_hive", "no_such_policy");
+} catch (RangerNotFoundException e) {
+    // 없는 경우 처리
+} catch (RangerException e) {
+    log.warn("{} {} -> {} ({})", e.getMethod(), e.getPath(), e.getStatus(), e.getRequestId());
+}</pre>
+</aside>
+</body>
+</html>

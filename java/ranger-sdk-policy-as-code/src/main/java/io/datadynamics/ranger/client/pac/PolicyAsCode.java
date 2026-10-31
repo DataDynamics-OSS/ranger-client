@@ -111,11 +111,15 @@ public final class PolicyAsCode {
 
     /**
      * Execute a plan. Updates carry the version seen at plan time, so a policy changed on the server in
-     * between fails with {@code RangerConflictException}.
+     * between fails with {@code RangerConflictException}. Role changes run first: Ranger rejects a policy
+     * that names a role which does not exist yet.
      */
     public List<Change> apply(Plan plan) {
         List<Change> done = new ArrayList<>();
-        for (Change c : plan.pending()) {
+        List<Change> ordered = new ArrayList<>();
+        plan.pending().stream().filter(c -> c.kind == Change.Kind.ROLE).forEach(ordered::add);
+        plan.pending().stream().filter(c -> c.kind != Change.Kind.ROLE).forEach(ordered::add);
+        for (Change c : ordered) {
             if (c.kind == Change.Kind.POLICY) {
                 RangerPolicy desired = (RangerPolicy) c.desired;
                 RangerPolicy current = (RangerPolicy) c.current;

@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ko">
+<body>
+<aside class="help" th:fragment="help">
+    <div th:replace="~{fragments :: helpTitle('서비스 정의 상세', '정책에 쓸 수 있는 리소스, 권한, 마스킹 종류를 봅니다.')}"></div>
+
+    <h3>리소스 계층</h3>
+    <p>리소스는 <b>level</b>과 <b>부모(parent)</b>로 계층을 이룹니다. Hive라면:</p>
+    <pre class="diagram">database (level 10)
+ ├─ table   (20) ─ column (30)
+ └─ udf     (20)
+url, global, hiveservice  (독립)</pre>
+    <p>정책의 리소스는 이 계층의 한 경로를 따라야 합니다. 예: <code>database=sales; table=orders; column=*</code>.</p>
+    <ul>
+        <li><b>필수(mandatory)</b>: 그 경로를 쓰면 반드시 값을 줘야 하는 리소스</li>
+        <li><b>recursive</b>: 하위까지 포함하는 옵션(HDFS 경로 등)을 지원하는지</li>
+        <li><b>excludes</b>: "이 값만 빼고"를 지원하는지</li>
+    </ul>
+
+    <h3>권한과 포함 관계</h3>
+    <p><b>포함하는 권한(impliedGrants)</b>이 있는 권한은 그것만 줘도 나열된 권한을 함께 받습니다.
+        예: Hive의 <code>all</code>은 select, update, create … 를 모두 포함합니다.</p>
+
+    <h3>마스킹 종류</h3>
+    <p>마스킹 정책에서 고를 수 있는 값입니다. 변환식은 Hive 플러그인이 쿼리를 바꿀 때 씁니다.
+        예: <code>MASK_HASH</code> → <code>mask_hash({col})</code>. 시드 정책은 <code>MASK_HASH</code>를 씁니다.</p>
+
+    <h3>이 화면이 쓰는 API</h3>
+    <pre class="code" data-lang="java">RangerServiceDef def = admin.serviceDefs().getByName("hive");
+List&lt;Map&lt;String, Object&gt;&gt; resources = def.getResources();     // 중첩 부분은 맵
+List&lt;Map&lt;String, Object&gt;&gt; accessTypes = def.getAccessTypes();</pre>
+    <p>중첩된 부분을 맵으로 두는 이유는 Ranger 버전마다 필드가 자주 바뀌기 때문입니다. 원본 JSON은 아래 "원본 JSON"에서 볼 수 있습니다.</p>
+</aside>
+</body>
+</html>

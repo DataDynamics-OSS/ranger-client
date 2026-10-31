@@ -1,0 +1,141 @@
+/* 데모 화면 공통 스타일입니다. 색상은 아래 CSS 변수로 모아 두고 각 규칙에서 var()로 씁니다. */
+:root {
+    --bg: #f6f7f9; --panel: #fff; --text: #1d232b; --muted: #687280; --border: #dde1e6;
+    --accent: #2457c5; --ok-bg: #e7f5ec; --ok: #17663a; --err-bg: #fdecec; --err: #a1261d; --warn: #9a6300;
+    --code-bg: #f1f3f6;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; font: 14px/1.5 system-ui, -apple-system, "Segoe UI", "Noto Sans KR", sans-serif; background: var(--bg); color: var(--text);
+    display: flex; flex-direction: column; overflow: hidden; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.nav { display: flex; align-items: center; gap: 20px; padding: 6px 24px; background: #17202c; color: #fff; min-height: 52px; flex: none; z-index: 10; }
+.nav .help-toggle { margin-left: auto; background: none; border: 1px solid #3c4b60; color: #c8d0db; padding: 4px 12px; }
+.nav .help-toggle:hover { background: #2c3a4d; color: #fff; }
+.nav .brand { color: #fff; font-weight: 600; }
+.nav nav { display: flex; gap: 4px; flex-wrap: wrap; }
+.nav nav a { color: #c8d0db; padding: 6px 10px; border-radius: 6px; }
+.nav nav .sep { width: 1px; background: #3c4b60; margin: 6px 4px; }
+.nav nav a.active, .nav nav a:hover { background: #2c3a4d; color: #fff; text-decoration: none; }
+/* 본문과 도움말 패널은 따로 스크롤됩니다. 도움말을 스크롤해도 본문 페이지는 움직이지 않습니다. */
+.layout { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 460px; }
+main { min-width: 0; overflow-y: auto; padding: 24px 32px; }
+main > * { max-width: 1200px; }
+.help { overflow-y: auto; overscroll-behavior: contain; background: #fbfcfe; border-left: 1px solid var(--border); padding: 20px 24px 48px; font-size: 13.5px; line-height: 1.7; }
+/* 도움말을 숨기면 본문이 전체 너비를 씁니다. */
+body.help-hidden .layout { grid-template-columns: minmax(0, 1fr); }
+body.help-hidden .help { display: none; }
+.help .help-title { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+.help .help-title h2 { margin: 0; font-size: 16px; }
+.help .help-title button { background: none; border: none; color: var(--muted); padding: 2px 6px; font-size: 18px; line-height: 1; }
+.help .help-lead { color: var(--muted); margin: 0 0 16px; }
+.help h3 { font-size: 14.5px; margin: 24px 0 8px; padding-top: 16px; border-top: 1px solid var(--border); }
+.help h3:first-of-type { border-top: none; padding-top: 0; }
+.help h4 { font-size: 13px; color: var(--text); margin: 14px 0 4px; }
+.help p { margin: 0 0 10px; }
+.help ul, .help ol { margin: 0 0 10px; padding-left: 20px; }
+.help li { margin-bottom: 4px; }
+.help table { font-size: 12.5px; margin-bottom: 10px; }
+.help th, .help td { padding: 4px 6px; }
+.help .tip { background: #eef4ff; border-left: 3px solid var(--accent); padding: 8px 12px; border-radius: 4px; margin: 10px 0; }
+.help .warn { background: #fff7e6; border-left: 3px solid var(--warn); padding: 8px 12px; border-radius: 4px; margin: 10px 0; }
+.help .term { font-weight: 600; }
+.help .monaco-host, .help pre { margin: 6px 0 12px; }
+.help pre.diagram { font-size: 11.5px; line-height: 1.5; white-space: pre; overflow-x: auto; background: #fff; border: 1px solid var(--border); }
+/* 좁은 화면에서는 두 열 배치를 풀고, 도움말을 본문 아래에 이어 붙여 페이지 전체가 함께 스크롤되게 합니다. */
+@media (max-width: 1100px) {
+    body { overflow: auto; display: block; }
+    .layout { display: block; }
+    main { overflow: visible; padding: 16px; }
+    .help { border-left: none; border-top: 1px solid var(--border); }
+}
+h1 { font-size: 22px; margin: 0 0 4px; }
+h2 { font-size: 17px; margin: 0 0 12px; }
+h3 { font-size: 15px; margin: 0 0 8px; }
+h4 { font-size: 13px; margin: 8px 0 4px; color: var(--muted); }
+.lead { color: var(--muted); margin: 0 0 20px; }
+.panel { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 16px 20px; margin-bottom: 16px; }
+.grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+.muted { color: var(--muted); }
+.small { font-size: 12px; }
+.pre-wrap { white-space: pre-wrap; }
+code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; }
+code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+pre { background: var(--code-bg); padding: 12px; border-radius: 6px; overflow: auto; max-height: 480px; margin: 0; }
+table { border-collapse: collapse; width: 100%; }
+th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+th { font-weight: 600; color: var(--muted); font-size: 12px; }
+td.path { word-break: break-all; }
+form.inline { display: inline; }
+.form-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 12px; }
+label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+label.check { flex-direction: row; align-items: center; gap: 6px; color: var(--text); font-size: 13px; }
+input[type=text], input[type=number], select, textarea { font: inherit; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; background: #fff; color: var(--text); min-width: 160px; }
+textarea { width: 100%; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; }
+button, .button { font: inherit; padding: 6px 14px; border-radius: 6px; border: 1px solid var(--accent); background: var(--accent); color: #fff; cursor: pointer; display: inline-block; }
+button.secondary, .button.secondary { background: #fff; color: var(--accent); }
+button.danger { background: var(--err); border-color: var(--err); }
+.alert { padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; }
+.alert.ok { background: var(--ok-bg); color: var(--ok); }
+.alert.error { background: var(--err-bg); color: var(--err); }
+.alert.error ul { margin: 6px 0 0; }
+.badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px; background: var(--code-bg); color: var(--text); }
+.badge.ok { background: var(--ok-bg); color: var(--ok); }
+.badge.err { background: var(--err-bg); color: var(--err); }
+.badge.warn { background: #fff4dc; color: var(--warn); }
+.method { font-family: ui-monospace, monospace; font-size: 12px; font-weight: 600; }
+.trace { margin-top: 32px; border-top: 2px solid var(--border); padding-top: 16px; }
+tr.failed td { color: var(--err); }
+details summary { cursor: pointer; }
+dl.kv { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 0; }
+dl.kv dt { color: var(--muted); }
+dl.kv dd { margin: 0; word-break: break-all; }
+/* 탭: 활성 탭 버튼에 밑줄을 긋고, 활성 패널만 보여 줍니다(demo.js가 active 클래스를 바꿉니다). */
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 12px; }
+.tabs button { background: none; color: var(--muted); border: none; border-bottom: 2px solid transparent; border-radius: 0; padding: 6px 12px; }
+.tabs button.active { color: var(--accent); border-bottom-color: var(--accent); }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+/* Policy as Code plan의 변경 종류별 색상입니다. */
+.plan-create { color: var(--ok); }
+.plan-update { color: var(--warn); }
+.plan-delete { color: var(--err); }
+.plan-unchanged { color: var(--muted); }
+
+/* Monaco 코드 보기와 편집기 */
+.monaco-host { border: 1px solid var(--border); border-radius: 6px; overflow: hidden; background: #fff; }
+.monaco-host.editor { border-color: #c5ccd6; }
+pre.code { white-space: pre-wrap; word-break: break-all; }
+
+/* 카드 두 열 배치. 각 카드(.panel)는 SDK 동작 하나를 실행하는 폼입니다. */
+.grid2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 1400px) { .grid2 { grid-template-columns: minmax(0, 1fr); } }
+.panel h3 { margin-bottom: 4px; }
+.panel > p.muted { margin-top: 0; }
+/* 세로로 쌓는 폼: 레이블 아래 입력이 가득 찹니다. .row는 한 줄에 여러 칸을 놓습니다. */
+form.stack { display: flex; flex-direction: column; gap: 8px; }
+form.stack input[type=text], form.stack input:not([type]), form.stack input[type=number], form.stack input[type=password],
+form.stack select, form.stack textarea { width: 100%; min-width: 0; }
+form.stack .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; align-items: end; }
+form.stack .row > button { justify-self: start; }
+form.stack .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+input:not([type]), input[type=password] { font: inherit; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; background: #fff; color: var(--text); min-width: 160px; }
+.inline { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; }
+/* 상태 표시. 값이 그대로 클래스 이름이 되는 경우(ALLOW, true …)도 함께 칠합니다. */
+.badge.ALLOW, .badge.true, .badge.UP { background: var(--ok-bg); color: var(--ok); }
+.badge.DENY, .badge.false, .badge.DOWN { background: var(--err-bg); color: var(--err); }
+.badge.NOT_DETERMINED, .badge.COOLDOWN { background: #fff4dc; color: var(--warn); }
+.badge + .badge { margin-left: 2px; }
+/* SDK 호출 결과 패널: 실행한 코드, 결과나 예외. */
+.call { border: 1px solid var(--border); border-left: 4px solid var(--ok); border-radius: 8px; padding: 10px 14px; margin: 12px 0; background: var(--panel); }
+.call.err { border-left-color: var(--err); }
+.call-head { display: flex; gap: 10px; align-items: center; margin-bottom: 6px; }
+.call .alert { margin: 8px 0 0; }
+.call details { margin-top: 8px; }
+.call details summary { font-size: 13px; color: var(--muted); }
+.call .monaco-host, .call pre { margin-top: 4px; }
+.trace.action { margin-top: 8px; padding-top: 8px; border-top-width: 1px; }
+.trace.action h4 { margin-top: 0; }
+#result:empty::before { content: "아래 폼의 결과가 여기에 나타납니다."; color: var(--muted); font-size: 12px; }
+.htmx-request button[type=submit], button.htmx-request { opacity: .6; }

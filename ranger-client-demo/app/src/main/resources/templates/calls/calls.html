@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ko">
+<head th:replace="~{fragments :: head('요청 기록')}"></head>
+<body>
+<header th:replace="~{fragments :: nav('calls')}"></header>
+<div class="layout">
+<main>
+    <h1>요청 기록</h1>
+    <p class="lead">이 앱의 SDK 클라이언트가 보낸 최근 요청입니다. 화면의 동작뿐 아니라 헬스 체크와 시더가 보낸 요청도 모두 들어 있습니다.
+        <code>RequestInterceptor</code>로 수집하며, 재시도와 장애 조치는 시도마다 따로 기록됩니다.</p>
+
+    <form class="panel form-row" method="get" th:action="@{/calls}">
+        <label>클라이언트
+            <select name="client" onchange="this.form.submit()">
+                <option value="">전체</option>
+                <option th:each="c : ${clients}" th:value="${c}" th:text="${c}" th:selected="${c == client}"></option>
+            </select>
+        </label>
+        <button type="submit" class="secondary">필터</button>
+        <span class="muted small">
+            <a th:href="@{/actuator/prometheus}" target="_blank">/actuator/prometheus</a> ·
+            <a th:href="@{/actuator/metrics/ranger.client.requests}" target="_blank">/actuator/metrics/ranger.client.requests</a>
+        </span>
+    </form>
+    <form class="inline" method="post" th:action="@{/calls/clear}"><button class="secondary">기록 지우기</button></form>
+
+    <section class="panel" style="margin-top: 12px">
+        <h3>HTTP 시도 <span class="muted" th:text="'(' + ${#lists.size(attempts)} + ')'"></span></h3>
+        <p class="muted" th:if="${#lists.isEmpty(attempts)}">기록 없음</p>
+        <div th:replace="~{fragments :: requestTable(${attempts})}"></div>
+    </section>
+
+    <section class="panel">
+        <h3>지표 (Micrometer)</h3>
+        <p class="muted small" th:unless="${metricsAvailable}">컨텍스트에 MeterRegistry가 없습니다.</p>
+        <th:block th:if="${metricsAvailable}">
+            <p class="muted small"><code>ranger.client.requests</code>(타이머, HTTP 시도마다 하나)와 <code>ranger.client.retries</code>
+                (카운터, 첫 시도 다음의 시도). 스타터가 자동 구성한 클라이언트만 기록합니다. 장애 실험용 클라이언트는 빠집니다.</p>
+            <table>
+                <thead><tr><th>ranger.client.requests 태그</th><th>횟수</th><th>평균 ms</th><th>최대 ms</th></tr></thead>
+                <tr th:each="t : ${timers}">
+                    <td><code th:text="${t.tags()}"></code></td>
+                    <td th:text="${t.count()}"></td>
+                    <td th:text="${#numbers.formatDecimal(t.meanMs(), 1, 1)}"></td>
+                    <td th:text="${#numbers.formatDecimal(t.maxMs(), 1, 1)}"></td>
+                </tr>
+                <tr th:if="${#lists.isEmpty(timers)}"><td colspan="4" class="muted">아직 기록된 요청이 없습니다.</td></tr>
+            </table>
+            <table style="margin-top: 12px">
+                <thead><tr><th>ranger.client.retries 태그</th><th>횟수</th></tr></thead>
+                <tr th:each="c : ${retries}">
+                    <td><code th:text="${c.tags()}"></code></td>
+                    <td th:text="${#numbers.formatDecimal(c.count(), 1, 0)}"></td>
+                </tr>
+                <tr th:if="${#lists.isEmpty(retries)}"><td colspan="2" class="muted">아직 기록된 재시도가 없습니다.</td></tr>
+            </table>
+        </th:block>
+    </section>
+
+    <section class="panel">
+        <h3>최근 SDK 호출</h3>
+        <p class="muted small">화면이 실행한 SDK 호출과 그 결과입니다. 최근 것이 위에 옵니다.</p>
+        <th:block th:each="c : ${recentCalls}">
+            <div th:replace="~{fragments/call :: panel(${c})}"></div>
+        </th:block>
+        <p th:if="${#lists.isEmpty(recentCalls)}" class="muted">아직 호출이 없습니다.</p>
+    </section>
+</main>
+<aside class="help" th:replace="~{help/requests :: help}"></aside>
+</div>
+</body>
+</html>

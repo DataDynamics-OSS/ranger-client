@@ -61,13 +61,14 @@ def test_scenario(sc):
     base = PDP if sc["op"].startswith("pdp.") else KMS if sc["op"].startswith("kms.") else ADMIN
     responses = [httpx.Response(r["status"], json=r.get("body")) if "body" in r else httpx.Response(r["status"])
                  for r in sc["responses"]]
+    opts = {"server_version": sc["server_version"]} if "server_version" in sc else {}
     with respx.mock(assert_all_called=False) as mock:
         route = mock.route(host=urlsplit(base).hostname).mock(side_effect=responses)
         if "expect_error" in sc:
             with pytest.raises(getattr(errors, sc["expect_error"])):
-                _invoke(sc["op"], sc["args"])
+                _invoke(sc["op"], sc["args"], **opts)
         else:
-            result = _invoke(sc["op"], sc["args"])
+            result = _invoke(sc["op"], sc["args"], **opts)
             if "expect_result" in sc:
                 _subset(sc["expect_result"], _result_dict(result))
             if "expect_result_size" in sc:
@@ -84,3 +85,8 @@ def test_scenario(sc):
                 _subset({k: str(v) for k, v in exp["query"].items()}, q)
             if "body" in exp:
                 _subset(exp["body"], json.loads(req.content))
+            for name, value in (exp.get("headers") or {}).items():
+                assert req.headers.get(name) == value, f"header {name}: {req.headers.get(name)!r}"
+            if exp.get("request_id_matches_body"):
+                body_id = json.loads(req.content).get("requestId")
+                assert body_id and req.headers.get("X-Request-Id") == body_id

@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ko">
+<body>
+<aside class="help" th:fragment="help">
+    <div th:replace="~{fragments :: helpTitle('PDP 권한 확인', '“이 사용자가 이 리소스에 이 일을 해도 되나?”를 Ranger PDP에 묻습니다.')}"></div>
+
+    <h3>PDP란?</h3>
+    <p>Ranger Admin은 정책을 <b>저장·관리</b>하고, 실제 <b>판단</b>은 각 서비스(Hive, HDFS …)에 붙은 플러그인이 합니다.
+        Ranger 2.9부터는 판단만 하는 별도 서버 <span class="term">PDP(Policy Decision Point)</span>가 있어서, 플러그인을 넣을 수 없는
+        애플리케이션도 REST로 권한을 물을 수 있습니다.</p>
+    <pre class="diagram">앱 ──authorize──▶ ranger-pdp ──(5초마다 정책 받기)──▶ ranger-admin
+     ◀─ ALLOW / DENY ─┘   사용자·그룹·역할도 Admin에서 받아 둠</pre>
+
+    <h3>요청과 결정</h3>
+    <table>
+        <thead><tr><th>요청 항목</th><th>예</th></tr></thead>
+        <tbody>
+        <tr><td>사용자 (+그룹, 역할)</td><td><code>alice</code>. 그룹·역할은 비우면 PDP가 찾아 줍니다.</td></tr>
+        <tr><td>리소스</td><td><code>database=sales, table=orders</code></td></tr>
+        <tr><td>권한(permission)</td><td><code>select</code>, <code>update</code>, <code>alter</code> …</td></tr>
+        </tbody>
+    </table>
+    <p>결과의 <b>결정</b>은 <code>ALLOW</code>, <code>DENY</code>, <code>NOT_DETERMINED</code> 중 하나이고, 권한마다 어느 정책이
+        결정했는지(<b>정책</b> 열), 마스킹·행 필터가 있으면 그 내용도 옵니다. 맞는 정책이 없으면 정책 id가 -1이고 기본값으로 거부됩니다.</p>
+
+    <h3>X-Forwarded-User와 위임 사용자</h3>
+    <p>이 앱은 PDP에 사용자 비밀번호를 보내지 않습니다. 대신 신뢰 헤더 <code>X-Forwarded-User: demo-app</code>로 자신을 밝히고,
+        요청 본문에 <b>판단받을 사용자</b>(alice 등)를 넣습니다. PDP는 <code>demo-app</code>을 <span class="term">위임 사용자</span>
+        (delegation user)로 등록해 두었으므로(<code>ranger-pdp-site.xml</code>) 다른 사용자를 대신한 질문을 받아 줍니다.
+        위임 사용자가 아니면 자기 자신에 대해서만 물을 수 있습니다.</p>
+    <div class="warn">신뢰 헤더 인증은 PDP 앞단(프록시, 내부망)에서 헤더 위조를 막을 때만 안전합니다. 운영에서는 Kerberos나 JWT를 쓰세요.</div>
+
+    <h3>이 화면 사용법</h3>
+    <ul>
+        <li><b>시드 시나리오</b> 버튼은 정해 둔 질문을 바로 보냅니다. 버튼 아래 줄이 기대하는 답입니다.</li>
+        <li><b>여러 권한 한 번에</b>: 한 줄에 <code>리소스 | 권한</code> 하나씩. 요청은 한 번만 갑니다.</li>
+        <li><b>리소스에 접근할 수 있는 주체</b>: 반대 방향 질문, "누가 이 테이블을 볼 수 있나?"</li>
+        <li><b>캐시</b>: 같은 질문을 캐시 없는 빈과 캐시 있는 클라이언트로 보내 HTTP 요청 수를 비교합니다.</li>
+    </ul>
+
+    <h3>따라 해 보기</h3>
+    <ol>
+        <li><code>mallory · select · database=sales, table=orders</code>를 누릅니다. mallory는 analyst 그룹이지만
+            sales_read 정책의 거부 항목 때문에 <code>DENY</code>입니다.</li>
+        <li><a th:href="@{/policies}">정책</a> 화면에서 sales_read의 DENY 항목에서 mallory를 removePrincipals로 뺍니다.</li>
+        <li>5초쯤 뒤 같은 버튼을 다시 누르면 <code>ALLOW</code>가 됩니다. (되돌리려면 addItems로 DENY에 mallory를 다시 넣으세요.)</li>
+        <li><code>alice · select · …customers, column=email</code>은 허용되지만 <code>MASK_HASH</code> 마스킹이 붙습니다.</li>
+    </ol>
+
+    <h3>이 화면이 쓰는 API</h3>
+    <pre class="code" data-lang="java">RangerPdpClient pdp = RangerPdpClient.builder()
+        .urls("http://ranger-pdp:6500")
+        .auth(TrustedHeaderAuth.of("X-Forwarded-User", "demo-app"))
+        .service("demo_hive", "hive")
+        .build();
+
+AuthzResult r = pdp.authorize("alice", ResourceInfo.of("database", "sales", "table", "orders"), "select");
+if (r.isAllowed()) { /* … */ }
+
+boolean ok = pdp.isAllowed("mallory", ResourceInfo.of("database", "sales", "table", "orders"), "select");
+ResourcePermissions who = pdp.permissions(ResourceInfo.of("database", "sales", "table", "orders"));</pre>
+    <p>스프링 부트 스타터를 쓰면 위 빌더 대신 <code>ranger.pdp.*</code> 설정으로 <code>RangerPdpClient</code> 빈이 만들어집니다(이 앱이 그렇습니다).</p>
+</aside>
+</body>
+</html>

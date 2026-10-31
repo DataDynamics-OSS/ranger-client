@@ -15,3 +15,6 @@ java/**/target/
 .idea/
 .vscode/
 *.iml
+
+# Demo
+ranger-client-demo/app/target/

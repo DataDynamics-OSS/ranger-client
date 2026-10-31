@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ko">
+<head th:replace="~{fragments :: head(${zone != null} ? ${zone.getName()} : '보안 영역')}"></head>
+<body>
+<header th:replace="~{fragments :: nav('zones')}"></header>
+<div class="layout">
+<main>
+    <p class="small"><a th:href="@{/zones}">&larr; 보안 영역</a></p>
+    <h1 th:text="${zone != null} ? ${zone.getName()} : '보안 영역'">보안 영역</h1>
+    <p class="lead">영역 하나를 <code>RangerSecurityZone</code>으로 읽고, 서비스별로 그 영역이 가진 리소스를 읽었습니다
+        (<code>resources(id, service)</code>는 리소스 id도 함께 돌려줍니다).</p>
+    <div th:replace="~{fragments/call :: panel(${get})}"></div>
+    <th:block th:each="r : ${resources}"><div th:replace="~{fragments/call :: panel(${r})}"></div></th:block>
+    <th:block th:if="${zone != null}">
+        <p><a th:href="@{/policies(service='',zone=${zone.getName()})}">이 영역의 정책 &rarr;</a></p>
+        <section class="panel">
+            <h3>JSON 고쳐 저장하기</h3>
+            <form class="stack" th:attr="hx-post=@{/zones/{n}/save(n=${zone.getName()})}" hx-target="#result">
+                <textarea name="json" rows="24" data-editor="json" th:text="${@json.pretty(zone)}"></textarea>
+                <div class="actions">
+                    <button>update</button>
+                    <button class="danger" th:attr="hx-post=@{/zones/{id}/delete(id=${zone.getId()})}" hx-target="#result"
+                            hx-confirm="이 영역(과 그 안의 정책)을 삭제할까요?">delete</button>
+                </div>
+            </form>
+            <p class="muted small"><code>update</code>는 영역 전체를 바꿉니다. JSON에서 빠진 서비스·리소스·관리자는 영역에서도 빠집니다.</p>
+        </section>
+        <div id="result"></div>
+    </th:block>
+    <section th:replace="~{fragments :: trace}"></section>
+</main>
+<aside class="help" th:replace="~{help/zones-detail :: help}"></aside>
+</div>
+</body>
+</html>

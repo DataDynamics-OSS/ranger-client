@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ko">
+<body>
+<aside class="help" th:fragment="help">
+    <div th:replace="~{fragments :: helpTitle('사용자·그룹', '정책과 역할이 가리키는 주체(사용자, 그룹)를 관리합니다.')}"></div>
+
+    <h3>주체(principal)</h3>
+    <p>정책 항목은 사용자, 그룹, 역할에게 권한을 줍니다. 사용자와 그룹은 보통 LDAP/AD에서 <b>usersync</b>가 동기화해 오지만(출처 "외부"),
+        이 데모처럼 Ranger에 직접 만들 수도 있습니다(출처 "내부").</p>
+    <pre class="diagram">그룹 analyst  ── alice
+(mallory는 그룹 없음: sales_read의 거부 항목 대상)
+그룹 engineer ── bob
+역할 analysts ── alice, 그룹 analyst</pre>
+    <p>PDP는 요청에 그룹이 없으면 여기 저장된 구성원 정보로 사용자의 그룹을 찾습니다(데모 PDP는 <code>use.rangerGroups=true</code>).</p>
+
+    <h3>Ranger 권한과 정책 권한은 다릅니다</h3>
+    <table>
+        <thead><tr><th>구분</th><th>뜻</th></tr></thead>
+        <tbody>
+        <tr><td><b>Ranger 권한</b> (ROLE_USER …)</td><td>Ranger <b>관리 화면</b>에서 무엇을 할 수 있는지. ROLE_SYS_ADMIN은 모든 관리 가능.</td></tr>
+        <tr><td><b>정책</b></td><td>Hive 등 <b>데이터</b>에 무엇을 할 수 있는지</td></tr>
+        </tbody>
+    </table>
+
+    <h3>이 화면 사용법</h3>
+    <ul>
+        <li><b>find</b>는 없으면 빈 <code>Optional</code>을 돌려줍니다. 예외가 아닙니다.</li>
+        <li><b>강제 삭제</b>를 끄면 Ranger는 사용자/그룹을 숨김 처리만 합니다. 켜면 완전히 지웁니다.</li>
+    </ul>
+
+    <h3>따라 해 보기</h3>
+    <ol>
+        <li>사용자 <code>carol</code>을 <b>create</b>, 그룹 <code>auditor</code>를 <b>create</b>합니다.</li>
+        <li><b>addUser</b>로 carol을 auditor에 넣고 <b>사용자의 그룹</b>으로 확인합니다.</li>
+        <li>같은 이름으로 다시 create하면 <code>RangerConflictException</code>이 납니다. 오류 상자를 확인하세요.</li>
+        <li>정리: removeUser 후 강제 삭제를 켜고 각각 <b>deleteByName</b>.</li>
+    </ol>
+    <div class="warn">시드 사용자 <code>alice</code>, <code>bob</code>, <code>mallory</code>와 그룹 <code>analyst</code>, <code>engineer</code>는 정책과 PDP 데모가 씁니다. 지우지 마세요.</div>
+
+    <h3>이 화면이 쓰는 API</h3>
+    <pre class="code" data-lang="java">List&lt;RangerUser&gt; users = admin.users().search("a", 0, 100);
+admin.users().create(RangerUser.builder().name("carol").firstName("Carol")
+        .password("Demo1234!").userRoleList(List.of("ROLE_USER")).build());
+Optional&lt;RangerUser&gt; carol = admin.users().find("carol");
+List&lt;RangerGroup&gt; groups = admin.users().groups(carol.get().getId());
+
+admin.groups().create(RangerGroup.builder().name("auditor").build());
+admin.groups().addUser("auditor", "carol");
+admin.groups().removeUser("auditor", "carol");
+admin.users().deleteByName("carol", true);   // force</pre>
+</aside>
+</body>
+</html>

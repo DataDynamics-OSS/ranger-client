@@ -7,7 +7,7 @@
     <parent>
         <groupId>io.datadynamics.ranger.client</groupId>
         <artifactId>ranger-sdk-parent</artifactId>
-        <version>0.1.0</version>
+        <version>0.2.0</version>
     </parent>
 
     <artifactId>ranger-sdk-bundle</artifactId>
@@ -39,6 +39,15 @@
 
     <build>
         <plugins>
+            <plugin>
+                <!-- This module has no classes, so without forceCreation an incremental build keeps the previous
+                     (already shaded) jar and the shade plugin re-shades it: the bundle would carry stale classes. -->
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <configuration>
+                    <forceCreation>true</forceCreation>
+                </configuration>
+            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>

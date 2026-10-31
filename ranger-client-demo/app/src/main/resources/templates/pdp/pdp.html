@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ko">
+<head th:replace="~{fragments :: head('PDP 권한 확인')}"></head>
+<body>
+<header th:replace="~{fragments :: nav('pdp')}"></header>
+<div class="layout">
+<main>
+    <h1>PDP 권한 확인</h1>
+    <p class="lead">Ranger 2.9의 정책 결정 지점(PDP, <code>/authz/v1</code>)에 <code>RangerPdpClient</code>로 권한 결정을 묻습니다.
+        클라이언트는 신뢰 헤더 <code>X-Forwarded-User</code>로 <code>demo-app</code>으로 인증하고, <code>demo-app</code>은 위임 사용자이므로
+        어떤 사용자를 대신해서든 물을 수 있습니다. 기본 서비스: <code th:text="${service}">demo_hive</code>
+        (<code th:text="${serviceType}">hive</code>). PDP가 Ranger 사용자 저장소에서 그룹과 역할을 찾으므로 사용자 이름만 있으면 됩니다.</p>
+
+    <section class="panel">
+        <h3>권한 결정</h3>
+        <p class="muted small">시드 시나리오 (눌러서 실행):</p>
+        <div class="form-row">
+            <form th:each="p : ${presets}" hx-post="/pdp/authorize" hx-target="#authz-result">
+                <input type="hidden" name="user" th:value="${p.user()}">
+                <input type="hidden" name="resource" th:value="${p.resource()}">
+                <input type="hidden" name="access" th:value="${p.access()}">
+                <button type="submit" class="secondary" style="text-align: left">
+                    <span th:text="${p.user()} + ' · ' + ${p.access()} + ' · ' + ${p.resource()}"></span><br>
+                    <span class="small" th:text="${p.expect()}"></span>
+                </button>
+            </form>
+        </div>
+        <form class="stack" hx-post="/pdp/authorize" hx-target="#authz-result">
+            <div class="row">
+                <label>사용자<input type="text" name="user" value="alice" required></label>
+                <label>그룹 (선택, 쉼표로 구분)<input type="text" name="groups" placeholder="analyst"></label>
+                <label>역할 (선택)<input type="text" name="roles" placeholder="analysts"></label>
+            </div>
+            <div class="row">
+                <label>리소스 (key=value, …)<input type="text" name="resource" value="database=sales, table=orders" required></label>
+                <label>권한 (하나 이상)<input type="text" name="access" value="select" required></label>
+            </div>
+            <div class="actions"><button type="submit">authorize</button></div>
+        </form>
+        <div id="authz-result"></div>
+        <p class="muted small">정책 고리: <a th:href="@{/policies}">정책</a> 화면(또는 Policy as Code)에서 정책을 바꾸고 다시 물어보세요.
+            PDP는 5초마다 Ranger Admin을 확인하므로(<code>ranger.authz.default.policy.pollIntervalMs</code>) 몇 초 안에 새 결정이 나옵니다.</p>
+    </section>
+
+    <div class="grid2">
+        <section class="panel">
+            <h3>여러 권한 한 번에</h3>
+            <p class="muted small">한 사용자의 여러 접근을 요청 한 번으로 묻습니다. 한 줄에 하나씩: <code>key=value, … | access, …</code></p>
+            <form class="stack" hx-post="/pdp/multi" hx-target="#multi-result">
+                <label>사용자<input type="text" name="user" value="alice" required></label>
+                <label>접근 목록
+                    <textarea name="accesses" rows="5">database=sales, table=orders | select
+database=sales, table=orders | update
+database=sales, table=customers, column=email | select
+database=finance, table=x | select</textarea></label>
+                <div class="actions"><button type="submit">authorizeMulti</button></div>
+            </form>
+            <div id="multi-result"></div>
+        </section>
+
+        <section class="panel">
+            <h3>리소스에 접근할 수 있는 주체</h3>
+            <p class="muted small">리소스에 권한이 있는 모든 사용자·그룹·역할을 권한별로 보여 줍니다.</p>
+            <form class="stack" hx-post="/pdp/permissions" hx-target="#perm-result">
+                <label>리소스<input type="text" name="resource" value="database=sales, table=orders" required></label>
+                <div class="actions"><button type="submit">permissions</button></div>
+            </form>
+            <div id="perm-result"></div>
+        </section>
+    </div>
+
+    <section class="panel">
+        <h3>클라이언트 쪽 결정 캐시</h3>
+        <p class="muted small">스타터 빈에는 캐시가 없습니다(기본값: 정책 변경이 늦게 보이지 않도록). 두 번째 클라이언트는
+            <code>RangerPdpClient.builder()…cache(Duration.ofSeconds(<span th:text="${ttl}">30</span>), 1000)</code>로 만들어 같은 요청에
+            로컬에서 답합니다. 두 번째 호출에는 HTTP 요청이 없습니다. 캐시 키는 <code>requestId</code>와 <code>accessTime</code>을 뺀 요청입니다.</p>
+        <form class="stack" hx-post="/pdp/cache" hx-target="#cache-result">
+            <div class="row">
+                <label>사용자<input type="text" name="user" value="alice" required></label>
+                <label>리소스<input type="text" name="resource" value="database=sales, table=orders" required></label>
+                <label>권한<input type="text" name="access" value="select" required></label>
+            </div>
+            <div class="actions">
+                <button type="submit">비교</button>
+                <button type="button" class="secondary" hx-post="/pdp/cache/clear" hx-target="#cache-result">cachedPdp.clearCache()</button>
+            </div>
+        </form>
+        <div id="cache-result"></div>
+    </section>
+    <section th:replace="~{fragments :: trace}"></section>
+</main>
+<aside class="help" th:replace="~{help/pdp :: help}"></aside>
+</div>
+
+<!--/* ===== htmx에 돌려주는 조각 ===== */-->
+<!--/* 조각 정의만 담습니다. 화면 전체를 그릴 때는 그리지 않고, 컨트롤러가 이름으로 골라 돌려줄 때만 씁니다. */-->
+<th:block th:if="${false}">
+
+<!--/* AuthzResult 하나의 결정 표. */-->
+<table th:fragment="decision(r)">
+    <thead><tr><th>권한</th><th>결정</th><th>정책</th><th>마스킹</th><th>행 필터</th></tr></thead>
+    <tbody>
+    <tr th:each="e : ${r.getPermissions()}" th:with="p=${e.value}, pol=${p.getAccess() != null ? p.getAccess().getPolicy() : null}">
+        <td><code th:text="${e.key}"></code></td>
+        <td><span class="badge" th:if="${p.getAccess() != null}" th:classappend="${p.getAccess().getDecisionRaw()}"
+                  th:text="${p.getAccess().getDecisionRaw()}"></span></td>
+        <td>
+            <span th:if="${pol == null or pol.getId() == null or pol.getId() < 0}" class="muted small">맞는 정책 없음 (기본 거부)</span>
+            <a th:if="${pol != null and pol.getId() != null and pol.getId() >= 0}" th:href="@{/policies/{id}(id=${pol.getId()})}"
+               th:text="'#' + ${pol.getId()} + ' v' + ${pol.getVersion()}"></a>
+        </td>
+        <td>
+            <th:block th:if="${p.getDataMask() != null}">
+                <code th:text="${p.getDataMask().getMaskType()}"></code>
+                <span th:if="${p.getDataMask().getMaskedValue() != null}" th:text="' → ' + ${p.getDataMask().getMaskedValue()}"></span>
+                <a th:if="${p.getDataMask().getPolicy() != null}" class="small"
+                   th:href="@{/policies/{id}(id=${p.getDataMask().getPolicy().getId()})}" th:text="'#' + ${p.getDataMask().getPolicy().getId()}"></a>
+            </th:block>
+        </td>
+        <td>
+            <th:block th:if="${p.getRowFilter() != null}">
+                <code th:text="${p.getRowFilter().getFilterExpr()}"></code>
+                <a th:if="${p.getRowFilter().getPolicy() != null}" class="small"
+                   th:href="@{/policies/{id}(id=${p.getRowFilter().getPolicy().getId()})}" th:text="'#' + ${p.getRowFilter().getPolicy().getId()}"></a>
+            </th:block>
+        </td>
+    </tr>
+    </tbody>
+</table>
+
+<div th:fragment="authzResult">
+    <div th:if="${call.ok()}" th:with="r=${call.result()}">
+        <h3>결정: <span class="badge" th:classappend="${r.getDecisionRaw()}" th:text="${r.getDecisionRaw()}"></span></h3>
+        <table th:replace="~{pdp/pdp :: decision(${r})}"></table>
+    </div>
+    <section th:replace="~{fragments/call :: panel(${call})}"></section>
+    <section th:replace="~{fragments :: actionTrace}"></section>
+</div>
+
+<div th:fragment="multiResult">
+    <div th:if="${call.ok()}" th:with="m=${call.result()}">
+        <h3>전체: <span class="badge" th:classappend="${m.getDecisionRaw()}" th:text="${m.getDecisionRaw()}"></span></h3>
+        <th:block th:each="r, st : ${m.getAccesses()}">
+            <p class="small"><code th:text="${st.index < #lists.size(lines)} ? ${lines[st.index]} : ''"></code></p>
+            <table th:replace="~{pdp/pdp :: decision(${r})}"></table>
+        </th:block>
+    </div>
+    <section th:replace="~{fragments/call :: panel(${call})}"></section>
+    <section th:replace="~{fragments :: actionTrace}"></section>
+</div>
+
+<div th:fragment="permissionsResult">
+    <table th:if="${call.ok()}">
+        <thead><tr><th>종류</th><th>주체</th><th>허용</th><th>거부</th></tr></thead>
+        <tbody>
+        <tr th:each="row : ${rows}">
+            <td th:text="${row.type()}"></td>
+            <td><strong th:text="${row.name()}"></strong></td>
+            <td><span class="badge ALLOW" th:each="x : ${row.allowed()}" th:text="${x}"></span></td>
+            <td><span class="badge DENY" th:each="x : ${row.denied()}" th:text="${x}"></span></td>
+        </tr>
+        </tbody>
+    </table>
+    <section th:replace="~{fragments/call :: panel(${call})}"></section>
+    <section th:replace="~{fragments :: actionTrace}"></section>
+</div>
+
+<div th:fragment="cacheResult">
+    <table>
+        <thead><tr><th>클라이언트</th><th>결정</th><th>HTTP 요청</th><th>시간</th></tr></thead>
+        <tbody>
+        <tr th:each="c, st : ${cacheCalls}">
+            <td th:text="${st.index == 0} ? '스타터 빈 (캐시 없음)' : '캐시 클라이언트, ' + ${st.index} + '번째 호출'"></td>
+            <td><span class="badge" th:if="${c.ok()}" th:classappend="${c.result().getDecisionRaw()}" th:text="${c.result().getDecisionRaw()}"></span>
+                <span class="badge err" th:unless="${c.ok()}" th:text="${c.errorType()}"></span></td>
+            <td th:text="${#lists.size(c.attempts())}"></td>
+            <td th:text="${c.elapsedMs()} + ' ms'"></td>
+        </tr>
+        </tbody>
+    </table>
+    <th:block th:each="c : ${cacheCalls}"><section th:replace="~{fragments/call :: panel(${c})}"></section></th:block>
+    <section th:replace="~{fragments :: actionTrace}"></section>
+</div>
+
+</th:block>
+</body>
+</html>

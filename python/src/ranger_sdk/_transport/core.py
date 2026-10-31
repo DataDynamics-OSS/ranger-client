@@ -31,7 +31,7 @@ LOG = logging.getLogger("ranger_sdk")
 
 SESSION_COOKIE = "RANGERADMINSESSIONID"
 REQUEST_ID_HEADER = "X-Request-Id"
-USER_AGENT = "ranger-sdk-python/0.1.0"
+USER_AGENT = "ranger-sdk-python/0.2.0"
 
 IDEMPOTENT = {"GET", "HEAD", "PUT", "DELETE", "OPTIONS"}
 _MASKED_HEADERS = {"authorization", "cookie", "set-cookie", "proxy-authorization"}
@@ -91,7 +91,12 @@ Hook = Callable[[str, Dict[str, Any]], None]
 
 
 class Attempt(Protocol):
-    """Outcome of one HTTP attempt; exactly one method is called."""
+    """Outcome of one HTTP attempt; exactly one of ``on_response`` / ``on_error`` is called.
+
+    Two optional methods receive the bodies (they may hold secrets such as KMS key material, so do not log
+    them blindly): ``on_request_body(content_type, body)`` before the attempt is sent, only when it has a body,
+    and ``on_response_body(status, body)`` right before ``on_response``.
+    """
 
     def on_response(self, status: int) -> None: ...
 
@@ -272,10 +277,25 @@ class _Call:
                     request.headers.__setitem__))
             except Exception:  # interceptors must never break a call
                 LOG.exception("ranger_sdk interceptor failed")
+        if request.content:
+            for a in self._attempts:
+                hook = getattr(a, "on_request_body", None)
+                if hook is not None:
+                    try:
+                        hook(request.headers.get("Content-Type"), request.content)
+                    except Exception:
+                        LOG.exception("ranger_sdk interceptor failed")
 
-    def _end(self, status: Optional[int] = None, error: Optional[BaseException] = None) -> None:
+    def _end(self, status: Optional[int] = None, error: Optional[BaseException] = None,
+             body: Optional[bytes] = None) -> None:
         attempts, self._attempts = self._attempts, []
         for a in attempts:
+            hook = getattr(a, "on_response_body", None) if status is not None else None
+            if hook is not None:
+                try:
+                    hook(status, body or b"")
+                except Exception:
+                    LOG.exception("ranger_sdk interceptor failed")
             try:
                 if status is not None:
                     a.on_response(status)
@@ -298,7 +318,7 @@ class _Call:
     # -- outcome ---------------------------------------------------------
     def on_response(self, resp: httpx.Response) -> Union[_Retry, httpx.Response]:
         status = resp.status_code
-        self._end(status=status)
+        self._end(status=status, body=resp.content)
         self._emit("response", {"method": self.req.method, "url": str(resp.request.url), "status": status,
                                 "attempt": self.attempt, "request_id": self.request_id})
         LOG.debug("<- %s %s status=%d id=%s", self.req.method, resp.request.url, status, self.request_id)
@@ -313,6 +333,9 @@ class _Call:
                 self.attempt -= 1  # an auth refresh does not consume a retry
                 return _Retry(0.0)
         if status in (429, 503) or status >= 500:
+            mapped = self.error(resp)
+            if isinstance(mapped, E.RangerNotFoundException):
+                raise mapped  # e.g. KMS "key does not exist": an answer, not a server fault; no retry, node stays up
             if status >= 500:
                 self.endpoints.mark_down(self.url)
                 if len(self.cfg.urls) > 1:
@@ -361,6 +384,10 @@ def _retry_after(resp: httpx.Response) -> Optional[float]:
             return None
 
 
+# Hadoop KMS reports an unknown key as a 500 RemoteException with one of these messages.
+_KMS_NO_KEY = re.compile(r"does not exist|can't find metadata|key not found", re.IGNORECASE)
+
+
 def _server_message(body: Any) -> Tuple[Optional[str], Any]:
     """Extract the human message from Ranger's error bodies.
 
@@ -374,6 +401,10 @@ def _server_message(body: Any) -> Tuple[Optional[str], Any]:
         body = remote
     msg = body.get("msgDesc") or body.get("message") or body.get("error")
     return (str(msg) if msg else None), body.get("messageList")
+
+
+def _has_message_name(fields: Any, name: str) -> bool:
+    return isinstance(fields, list) and any(isinstance(f, dict) and f.get("name") == name for f in fields)
 
 
 def map_error(resp: httpx.Response, method: str, path: str, server: str, request_id: str) -> E.RangerException:
@@ -391,7 +422,11 @@ def map_error(resp: httpx.Response, method: str, path: str, server: str, request
         return E.RangerAuthenticationException(f"Authentication failed: {summary}", **kw)
     if status == 403:
         return E.RangerAccessDeniedException(f"Access denied: {summary}", **kw)
-    if status == 404:
+    remote = isinstance(body, dict) and isinstance(body.get("RemoteException"), dict)
+    if (status == 404 or (status == 400 and _has_message_name(fields, "DATA_NOT_FOUND"))
+            or (status == 500 and remote and msg and _KMS_NO_KEY.search(msg))):
+        # Ranger's xusers API answers an unknown user/group name with 400 + messageList[DATA_NOT_FOUND];
+        # KMS answers an unknown key with 500 RemoteException "Key x does not exist".
         return E.RangerNotFoundException(f"Not found: {summary}", **kw)
     if status == 409 or (status == 400 and msg and _DUPLICATE.search(msg)):
         return E.RangerConflictException(f"Conflict: {summary}", **kw)

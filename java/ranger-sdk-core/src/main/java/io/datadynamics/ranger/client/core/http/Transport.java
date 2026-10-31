@@ -1,7 +1,9 @@
 package io.datadynamics.ranger.client.core.http;
 
 import io.datadynamics.ranger.client.core.ClientConfig;
+import io.datadynamics.ranger.client.core.RangerException;
 import io.datadynamics.ranger.client.core.RangerException.ErrorContext;
+import io.datadynamics.ranger.client.core.RangerNotFoundException;
 import io.datadynamics.ranger.client.core.RangerTransportException;
 import io.datadynamics.ranger.client.core.RequestInterceptor;
 import io.datadynamics.ranger.client.core.RequestListener;
@@ -37,7 +39,7 @@ import java.util.UUID;
 public final class Transport implements AutoCloseable {
     public static final String REQUEST_ID_HEADER = "X-Request-Id";
     public static final String SESSION_COOKIE = "RANGERADMINSESSIONID";
-    static final String USER_AGENT = "ranger-sdk-java/0.1.0";
+    static final String USER_AGENT = "ranger-sdk-java/0.2.0";
     private static final System.Logger LOG = System.getLogger("io.datadynamics.ranger.client");
 
     private final ClientConfig cfg;
@@ -98,13 +100,16 @@ public final class Transport implements AutoCloseable {
             Map<String, String> extra = new LinkedHashMap<>();
             List<RequestInterceptor.Attempt> attempts = begin(call.method, target, attempt, requestId, extra);
             HttpRequest request = build(call, target, requestId, extra);
+            if (call.body != null) {
+                requestBody(attempts, call.contentType, call.body);
+            }
             fireRequest(call.method, request.uri(), attempt, requestId);
             long started = System.nanoTime();
             HttpResponse<byte[]> resp;
             try {
                 resp = http.send(request, HttpResponse.BodyHandlers.ofByteArray());
             } catch (IOException e) {
-                end(attempts, null, e);
+                end(attempts, null, null, e);
                 endpoints.markDown(base);
                 failed.add(base);
                 fireError(call.method, request.uri(), e, attempt, requestId);
@@ -118,13 +123,13 @@ public final class Transport implements AutoCloseable {
                 throw new RangerTransportException("Could not reach Ranger " + cfg.server() + ": " + e,
                         new ErrorContext(null, call.method, call.path, base.toString(), requestId, null, null), e);
             } catch (InterruptedException e) {
-                end(attempts, null, e);
+                end(attempts, null, null, e);
                 Thread.currentThread().interrupt();
                 throw new RangerTransportException("Interrupted",
                         new ErrorContext(null, call.method, call.path, base.toString(), requestId, null, null), e);
             }
             int status = resp.statusCode();
-            end(attempts, status, null);
+            end(attempts, status, resp.body(), null);
             fireResponse(call.method, request.uri(), status, Duration.ofNanos(System.nanoTime() - started), attempt, requestId);
             LOG.log(Level.DEBUG, "<- {0} {1} status={2} id={3}", call.method, request.uri(), status, requestId);
             if (status < 400) {
@@ -140,6 +145,10 @@ public final class Transport implements AutoCloseable {
                 }
             }
             if (status == 429 || status >= 500) {
+                RangerException mapped = ErrorMapper.map(status, resp.body(), call.method, call.path, base.toString(), requestId);
+                if (mapped instanceof RangerNotFoundException) {
+                    throw mapped; // e.g. KMS "key does not exist": an answer, not a server fault; no retry, node stays up
+                }
                 if (status >= 500) {
                     endpoints.markDown(base);
                     if (endpoints.size() > 1) {
@@ -272,11 +281,21 @@ public final class Transport implements AutoCloseable {
         return out;
     }
 
-    private static void end(List<RequestInterceptor.Attempt> attempts, Integer status, Throwable error) {
+    private static void requestBody(List<RequestInterceptor.Attempt> attempts, String contentType, byte[] body) {
+        for (RequestInterceptor.Attempt a : attempts) {
+            try {
+                a.onRequestBody(contentType, body);
+            } catch (RuntimeException e) {
+                LOG.log(Level.WARNING, "request interceptor failed", e);
+            }
+        }
+    }
+
+    private static void end(List<RequestInterceptor.Attempt> attempts, Integer status, byte[] body, Throwable error) {
         for (RequestInterceptor.Attempt a : attempts) {
             try {
                 if (status != null) {
-                    a.onResponse(status);
+                    a.onResponse(status, body);
                 } else {
                     a.onError(error);
                 }

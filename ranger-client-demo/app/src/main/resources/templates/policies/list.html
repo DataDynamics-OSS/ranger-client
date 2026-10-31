@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ko">
+<head th:replace="~{fragments :: head('정책')}"></head>
+<body>
+<header th:replace="~{fragments :: nav('policies')}"></header>
+<div class="layout">
+<main>
+    <h1>정책</h1>
+    <p class="lead"><code>PolicyFilter</code>로 검색하고(서버 쪽 필터와 페이징), 타입이 있는 빌더로 정책을 만들고, 기존 정책의 항목을
+        바꾸고, 리소스나 사용자로 정책을 찾고, export/import JSON으로 한꺼번에 옮깁니다.</p>
+
+    <form class="panel form-row" method="get" th:action="@{/policies}">
+        <label>서비스<input type="text" name="service" th:value="${s.service()}"></label>
+        <label>이름<input type="text" name="name" th:value="${s.name()}"></label>
+        <label>보안 영역<input type="text" name="zone" th:value="${s.zone()}"></label>
+        <label>사용자<input type="text" name="user" th:value="${s.user()}"></label>
+        <label>그룹<input type="text" name="group" th:value="${s.group()}"></label>
+        <label>역할<input type="text" name="role" th:value="${s.role()}"></label>
+        <label>레이블<input type="text" name="label" th:value="${s.label()}"></label>
+        <label>리소스 종류<input type="text" name="resType" th:value="${s.resType()}" placeholder="database"></label>
+        <label>리소스 값<input type="text" name="resValue" th:value="${s.resValue()}" placeholder="sales"></label>
+        <label>정책 종류
+            <select name="policyType">
+                <option value="" th:selected="${s.policyType() == null}">전체</option>
+                <option value="0" th:selected="${s.policyType() == 0}">접근(access)</option>
+                <option value="1" th:selected="${s.policyType() == 1}">마스킹(data mask)</option>
+                <option value="2" th:selected="${s.policyType() == 2}">행 필터(row filter)</option>
+            </select>
+        </label>
+        <label>활성
+            <select name="enabled">
+                <option value="" th:selected="${s.enabled() == null}">전체</option>
+                <option value="true" th:selected="${s.enabled() == 'true'}">true</option>
+                <option value="false" th:selected="${s.enabled() == 'false'}">false</option>
+            </select>
+        </label>
+        <label>페이지 크기<input name="limit" type="number" min="1" th:value="${s.limit()}"></label>
+        <button type="submit">검색</button>
+    </form>
+
+    <section id="list" class="panel" th:attr="hx-get=${self}" hx-trigger="refresh from:body" hx-select="#list" hx-swap="outerHTML">
+        <div th:replace="~{fragments/call :: panel(${search})}"></div>
+        <th:block th:if="${page != null}">
+            <table>
+                <thead><tr><th>id</th><th>이름</th><th>종류</th><th>활성</th><th>리소스</th><th>레이블</th><th>보안 영역</th></tr></thead>
+                <tbody>
+                <tr th:each="p : ${page.items()}">
+                    <td><a th:href="@{/policies/{id}(id=${p.getId()})}" th:text="${p.getId()}"></a></td>
+                    <td><a th:href="@{/policies/{id}(id=${p.getId()})}" th:text="${p.getName()}"></a></td>
+                    <td th:text="${p.getPolicyType() == null or p.getPolicyType() == 0} ? 'access' : (${p.getPolicyType() == 1} ? 'mask' : 'row filter')"></td>
+                    <td><span class="badge" th:classappend="${p.isEnabled() == null or p.isEnabled()}" th:text="${p.isEnabled() == null or p.isEnabled()}"></span></td>
+                    <td class="small">
+                        <div th:each="r : ${p.getResources()}">
+                            <code th:text="${r.key}"></code>=<span th:text="${#strings.listJoin(r.value.getValues(), ',')}"></span>
+                        </div>
+                    </td>
+                    <td><span class="badge" th:each="l : ${p.getPolicyLabels()}" th:text="${l}"></span></td>
+                    <td th:text="${p.getZoneName()}"></td>
+                </tr>
+                </tbody>
+            </table>
+            <p class="small">
+                <a th:if="${s.start() > 0}"
+                   th:href="@{/policies(service=${s.service()},name=${s.name()},zone=${s.zone()},user=${s.user()},group=${s.group()},role=${s.role()},label=${s.label()},resType=${s.resType()},resValue=${s.resValue()},enabled=${s.enabled()},policyType=${s.policyType()},limit=${s.limit()},start=${s.start() - s.limit() < 0 ? 0 : s.start() - s.limit()})}">&larr; 이전</a>
+                <span class="muted" th:text="|${s.start() + 1}-${s.start() + page.size()}번째 (페이지 크기 ${s.limit()})|"></span>
+                <a th:if="${page.hasMore()}"
+                   th:href="@{/policies(service=${s.service()},name=${s.name()},zone=${s.zone()},user=${s.user()},group=${s.group()},role=${s.role()},label=${s.label()},resType=${s.resType()},resValue=${s.resValue()},enabled=${s.enabled()},policyType=${s.policyType()},limit=${s.limit()},start=${page.nextStartIndex()})}">다음 &rarr;</a>
+            </p>
+        </th:block>
+    </section>
+
+    <h2>동작</h2>
+    <div id="result"></div>
+
+    <div class="grid2">
+        <div>
+            <section class="panel">
+                <h3>정책 만들기</h3>
+                <p class="muted small">리소스는 <code>종류=값[,값]; ...</code> 형식입니다. <b>apply</b>는 이름 기준 upsert(여러 번 실행해도 안전),
+                    <b>create</b>는 같은 이름이 있으면 <code>RangerConflictException</code>, <b>serverApply</b>는 같은 리소스의 정책에
+                    합쳐 넣는 Ranger 자체 <code>/policy/apply</code>입니다.</p>
+                <form class="stack" hx-post="/policies/build" hx-target="#result">
+                    <div class="row">
+                        <label>서비스<input type="text" name="service" value="demo_hive"></label>
+                        <label>이름<input type="text" name="name" value="sdk_demo_marketing"></label>
+                        <label>레이블<input type="text" name="label" value="sdk-demo"></label>
+                    </div>
+                    <label>설명<input type="text" name="description" value="Created from the SDK demo"></label>
+                    <label>리소스<input type="text" name="resources" value="database=marketing; table=*; column=*"></label>
+                    <div class="row">
+                        <label>허용 사용자<input type="text" name="allowUsers" value="alice"></label>
+                        <label>허용 그룹<input type="text" name="allowGroups" value="analyst"></label>
+                        <label>허용 역할<input type="text" name="allowRoles" value=""></label>
+                        <label>허용 권한<input type="text" name="allowAccesses" value="select"></label>
+                    </div>
+                    <div class="row">
+                        <label>거부 사용자<input type="text" name="denyUsers" value="mallory"></label>
+                        <label>거부 그룹<input type="text" name="denyGroups" value=""></label>
+                        <label>거부 권한<input type="text" name="denyAccesses" value="select"></label>
+                    </div>
+                    <div class="actions">
+                        <button name="mode" value="apply">apply</button>
+                        <button name="mode" value="create" class="secondary">create</button>
+                        <button name="mode" value="server-apply" class="secondary">serverApply</button>
+                    </div>
+                </form>
+            </section>
+
+            <section class="panel">
+                <h3>기존 정책의 항목 바꾸기</h3>
+                <p class="muted small">버전 확인을 하는 read-modify-write입니다. 그 사이에 다른 곳에서 고쳤으면 <code>RangerConflictException</code>이 납니다.
+                    주체를 빼서 아무도 남지 않은 항목은 지워집니다.</p>
+                <form class="stack" hx-post="/policies/items/add" hx-target="#result">
+                    <div class="row">
+                        <label>서비스<input type="text" name="service" value="demo_hive"></label>
+                        <label>정책 이름<input type="text" name="name" value="sales_read"></label>
+                        <label>항목 목록
+                            <select name="kind">
+                                <option>ALLOW</option><option>DENY</option><option>ALLOW_EXCEPTIONS</option><option>DENY_EXCEPTIONS</option>
+                            </select>
+                        </label>
+                    </div>
+                    <div class="row">
+                        <label>사용자<input type="text" name="users" value="bob"></label>
+                        <label>그룹<input type="text" name="groups" value=""></label>
+                        <label>역할<input type="text" name="roles" value=""></label>
+                        <label>권한<input type="text" name="accesses" value="select"></label>
+                    </div>
+                    <div class="actions">
+                        <button>addItems</button>
+                        <button class="secondary" hx-post="/policies/items/remove" hx-target="#result">removePrincipals</button>
+                    </div>
+                </form>
+            </section>
+
+            <section class="panel">
+                <h3>이름으로 삭제</h3>
+                <form class="stack" hx-post="/policies/delete-by-name" hx-target="#result" hx-confirm="이 정책을 Ranger에서 삭제할까요?">
+                    <div class="row">
+                        <label>서비스<input type="text" name="service" value="demo_hive"></label>
+                        <label>정책 이름<input type="text" name="name" value="sdk_demo_marketing"></label>
+                        <button class="danger">deleteByName</button>
+                    </div>
+                </form>
+            </section>
+        </div>
+
+        <div>
+            <section class="panel">
+                <h3>리소스에 걸린 정책</h3>
+                <p class="muted small">주어진 리소스와 맞는 정책을 찾습니다(서비스 타입별 <code>/policy?resource:...</code> 조회).</p>
+                <form class="stack" hx-post="/policies/for-resource" hx-target="#result">
+                    <div class="row">
+                        <label>서비스 타입<input type="text" name="serviceType" value="hive"></label>
+                        <label>서비스<input type="text" name="service" value="demo_hive"></label>
+                    </div>
+                    <label>리소스<input type="text" name="resource" value="database=sales; table=orders"></label>
+                    <div class="actions"><button>forResource</button></div>
+                </form>
+            </section>
+
+            <section class="panel">
+                <h3>사용자가 들어간 정책</h3>
+                <form class="stack" hx-post="/policies/for-user" hx-target="#result">
+                    <div class="row">
+                        <label>사용자<input type="text" name="user" value="mallory"></label>
+                        <label>서비스(선택)<input type="text" name="service" value="demo_hive"></label>
+                        <button>forUser</button>
+                    </div>
+                </form>
+            </section>
+
+            <section class="panel">
+                <h3>Export / import JSON</h3>
+                <p class="muted small">Ranger의 일괄 형식입니다(<code>exportJson</code> / <code>importPoliciesFromFile</code>).
+                    export 결과를 import 칸에 붙여 넣으세요. <code>servicesMap</code>은 들여오면서 서비스 이름을 바꿉니다(예: <code>demo_hive=dev_hive</code>).</p>
+                <form class="stack" hx-post="/policies/export" hx-target="#result">
+                    <div class="row">
+                        <label>서비스<input type="text" name="services" value="demo_hive"></label>
+                        <label>보안 영역(선택)<input type="text" name="zone" value=""></label>
+                        <button>exportJson</button>
+                    </div>
+                </form>
+                <form class="stack" hx-post="/policies/import" hx-target="#result" style="margin-top: 12px"
+                      hx-confirm="Ranger로 들여올까요? override를 켜면 대상 서비스의 기존 정책이 모두 먼저 삭제됩니다.">
+                    <label>export JSON<textarea name="json" rows="8" data-editor="json" placeholder='{"policies": [ ... ]}'></textarea></label>
+                    <div class="row">
+                        <label>servicesMap<input type="text" name="servicesMap" value="" placeholder="demo_hive=dev_hive"></label>
+                        <label class="check"><input type="checkbox" name="override" value="true"> override (정책 전체 교체)</label>
+                        <button>importJson</button>
+                    </div>
+                </form>
+            </section>
+        </div>
+    </div>
+    <section th:replace="~{fragments :: trace}"></section>
+</main>
+<aside class="help" th:replace="~{help/policies-list :: help}"></aside>
+</div>
+</body>
+</html>

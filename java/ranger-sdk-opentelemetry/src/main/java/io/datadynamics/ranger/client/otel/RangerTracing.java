@@ -34,7 +34,7 @@ import java.util.function.BiConsumer;
  */
 public final class RangerTracing implements RequestInterceptor {
     public static final String INSTRUMENTATION_NAME = "io.datadynamics.ranger.client";
-    public static final String INSTRUMENTATION_VERSION = "0.1.0";
+    public static final String INSTRUMENTATION_VERSION = "0.2.0";
 
     static final AttributeKey<String> METHOD = AttributeKey.stringKey("http.request.method");
     static final AttributeKey<String> URL = AttributeKey.stringKey("url.full");

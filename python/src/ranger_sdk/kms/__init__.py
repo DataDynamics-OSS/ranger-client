@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any, Dict, List, Optional, Sequence, Union
 
 from ranger_sdk._client import _AsyncBase, _SyncBase
 from ranger_sdk._flow import Flow, call, flow
 from ranger_sdk._transport import Request, seg
+from ranger_sdk.errors import RangerNotFoundException
 from ranger_sdk.models import EncryptedKeyVersion, KeyMetadata, KeyVersion
 
 V1 = "/kms/v1"
@@ -18,6 +20,16 @@ def _one(model: Any) -> Any:
 
 def _many(model: Any) -> Any:
     return lambda d: [model.model_validate(x) for x in d or []]
+
+
+def _existing(req: Request, what: str, parse: Any) -> Any:
+    """KMS reports an unknown key or key version as ``200 {}`` (``[]`` for its versions) rather than 404."""
+    def check(d: Any) -> Any:
+        if not d:
+            raise RangerNotFoundException(f"Not found: {what}", status=200, method=req.method, path=req.path,
+                                          body=json.dumps(d))
+        return parse(d)
+    return check
 
 
 class _KmsMixin:
@@ -47,7 +59,8 @@ class _KmsMixin:
 
     @flow
     def metadata(self, name: str) -> Flow[KeyMetadata]:
-        return (yield from call(Request("GET", f"{V1}/key/{seg(name)}/_metadata"), _one(KeyMetadata)))
+        req = Request("GET", f"{V1}/key/{seg(name)}/_metadata")
+        return (yield from call(req, _existing(req, f"key {name}", _one(KeyMetadata))))
 
     @flow
     def metadata_bulk(self, names: Sequence[str]) -> Flow[List[KeyMetadata]]:
@@ -55,15 +68,18 @@ class _KmsMixin:
 
     @flow
     def current_version(self, name: str) -> Flow[KeyVersion]:
-        return (yield from call(Request("GET", f"{V1}/key/{seg(name)}/_currentversion"), _one(KeyVersion)))
+        req = Request("GET", f"{V1}/key/{seg(name)}/_currentversion")
+        return (yield from call(req, _existing(req, f"key {name}", _one(KeyVersion))))
 
     @flow
     def versions(self, name: str) -> Flow[List[KeyVersion]]:
-        return (yield from call(Request("GET", f"{V1}/key/{seg(name)}/_versions"), _many(KeyVersion)))
+        req = Request("GET", f"{V1}/key/{seg(name)}/_versions")
+        return (yield from call(req, _existing(req, f"key {name}", _many(KeyVersion))))
 
     @flow
     def key_version(self, version_name: str) -> Flow[KeyVersion]:
-        return (yield from call(Request("GET", f"{V1}/keyversion/{seg(version_name)}"), _one(KeyVersion)))
+        req = Request("GET", f"{V1}/keyversion/{seg(version_name)}")
+        return (yield from call(req, _existing(req, f"key version {version_name}", _one(KeyVersion))))
 
     @flow
     def names(self) -> Flow[List[str]]:

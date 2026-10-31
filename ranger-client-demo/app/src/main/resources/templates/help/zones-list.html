@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ko">
+<body>
+<aside class="help" th:fragment="help">
+    <div th:replace="~{fragments :: helpTitle('보안 영역', '서비스의 리소스 일부를 떼어 내 따로 관리하는 보안 영역(security zone)을 다룹니다.')}"></div>
+
+    <h3>보안 영역이란?</h3>
+    <p>한 서비스(예: <code>demo_hive</code>)의 정책은 보통 서비스 관리자가 모두 관리합니다. 그런데 재무 데이터처럼
+        <b>다른 팀이 따로 관리해야 하는 리소스</b>가 있으면, 그 리소스를 <span class="term">보안 영역</span>으로 떼어 냅니다.</p>
+    <pre class="diagram">서비스 demo_hive
+ ├─ (영역 없음)      database=sales …   ← 일반 정책
+ └─ 영역 finance     database=finance   ← finance 영역의 정책만 적용
+      관리자 admin · 감사자 admin</pre>
+    <ul>
+        <li>영역에 속한 리소스에는 <b>그 영역의 정책만</b> 적용됩니다. 영역 밖 정책은 영향을 주지 않습니다.</li>
+        <li>영역마다 <b>관리자(admins)</b>와 <b>감사자(auditors)</b>를 따로 둡니다.</li>
+        <li>리소스 하나는 <b>한 영역에만</b> 속할 수 있습니다.</li>
+        <li><b>태그 서비스</b>를 영역에 연결하면 태그 기반 정책도 영역 단위로 나뉩니다.</li>
+    </ul>
+
+    <h3>이 화면 사용법</h3>
+    <ul>
+        <li>목록 위의 두 결과는 가벼운 <code>headers()</code>(id와 이름만)와 영역 전체를 읽는 <code>stream()</code>입니다.</li>
+        <li><b>영역 만들기</b>: 서비스 하나와 리소스 하나(<code>종류=값</code>)로 영역을 만듭니다. 입력한 사용자가 관리자·감사자가 됩니다.</li>
+        <li><b>부분 수정</b>: 영역 전체를 다시 보내지 않고, 리소스·관리자·태그 서비스를 더하거나 뺍니다.</li>
+        <li>이름을 누르면 영역 상세(JSON 편집, 리소스 목록)로 갑니다.</li>
+    </ul>
+
+    <h3>따라 해 보기</h3>
+    <ol>
+        <li><b>영역 만들기</b>의 기본값으로 <b>create</b>를 누릅니다. <code>sdk_demo_marketing</code> 영역이 생깁니다.</li>
+        <li>리소스를 <code>database=finance</code>로 바꾸고 이름을 바꿔 다시 만듭니다. finance 영역이 이미 가진 리소스라
+            <code>RangerValidationException</code>(400)이 납니다.</li>
+        <li><b>부분 수정</b>에서 영역 <code>sdk_demo_marketing</code>, 리소스 <code>database=marketing_archive</code>로
+            updatePartial을 누르면 리소스가 하나 더 붙습니다.</li>
+        <li><b>deleteByName</b>으로 <code>sdk_demo_marketing</code>을 지웁니다.</li>
+    </ol>
+    <div class="warn">시드 영역 <code>finance</code>는 다른 화면 예시에서 쓰므로 지우지 마세요.</div>
+
+    <h3>이 화면이 쓰는 API</h3>
+    <pre class="code" data-lang="java">List&lt;Map&lt;String, Object&gt;&gt; headers = admin.zones().headers();
+List&lt;RangerSecurityZone&gt; zones = admin.zones().stream().toList();
+
+RangerPrincipal me = RangerPrincipal.builder().type("USER").name("admin").build();
+admin.zones().create(RangerSecurityZone.builder().name("sdk_demo_marketing")
+        .services(Map.of("demo_hive", ZoneService.builder().resources(List.of(
+            ZoneServiceResource.builder().resource(Map.of("database", List.of("marketing"))).build()))
+            .build()))
+        .admins(List.of(me)).auditors(List.of(me))
+        .build());
+
+long id = admin.zones().getByName("sdk_demo_marketing").getId();
+admin.zones().updatePartial(id, SecurityZoneChangeRequest.builder()
+        .adminsToAdd(List.of(RangerPrincipal.builder().type("USER").name("alice").build()))
+        .build());
+admin.zones().deleteByName("sdk_demo_marketing");</pre>
+    <p>v2 API(<code>/service/public/v2/api/zones-v2</code>)를 씁니다. Ranger가 이 API를 지원하지 않으면 SDK는
+        <code>UnsupportedFeatureException</code>을 던집니다.</p>
+</aside>
+</body>
+</html>

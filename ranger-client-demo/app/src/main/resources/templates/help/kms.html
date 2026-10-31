@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ko">
+<body>
+<aside class="help" th:fragment="help">
+    <div th:replace="~{fragments :: helpTitle('KMS', 'Ranger KMS에서 암호화 키를 만들고, 롤오버하고, 데이터 키(EEK)를 다룹니다.')}"></div>
+
+    <h3>Ranger KMS란?</h3>
+    <p>Ranger KMS는 Hadoop KMS와 같은 REST API를 제공하는 <b>키 관리 서버</b>입니다. 주로 HDFS 투명 암호화(encryption zone)의
+        키를 보관합니다. 키는 KMS DB에 마스터 키로 암호화되어 저장되고, 누가 어떤 키 작업을 할 수 있는지는 Ranger Admin의
+        KMS 서비스(<code>dev_kms</code>) 정책으로 정합니다.</p>
+
+    <h3>키, 버전, EEK</h3>
+    <table>
+        <thead><tr><th>용어</th><th>뜻</th></tr></thead>
+        <tbody>
+        <tr><td><b>키</b> (key)</td><td>이름이 붙은 키. 예: <code>demo-key</code>. 암호(cipher)와 길이를 가집니다.</td></tr>
+        <tr><td><b>키 버전</b></td><td>실제 키 재료. <b>롤오버</b>하면 새 버전이 생기고, 새 암호화는 새 버전을 씁니다.
+            옛 버전은 옛 데이터 복호화를 위해 남습니다. 버전 이름은 <code>demo-key@0</code>, <code>demo-key@1</code> …</td></tr>
+        <tr><td><b>DEK</b></td><td>파일 하나를 실제로 암호화하는 데이터 키</td></tr>
+        <tr><td><b>EEK</b></td><td>키(영역 키)로 암호화된 DEK. 파일 메타데이터에는 EEK만 저장됩니다.</td></tr>
+        </tbody>
+    </table>
+    <pre class="diagram">generateEek(demo-key)  → EEK (demo-key@0으로 암호화된 DEK)
+decryptEek(EEK)        → DEK 평문 (decrypteek 권한 필요)
+rolloverKey(demo-key)  → demo-key@1
+reencryptEek(EEK)      → demo-key@1로 다시 암호화된 EEK (DEK는 그대로)</pre>
+
+    <h3>이 화면 사용법</h3>
+    <ul>
+        <li><b>키</b> 표의 버튼은 그 키에 대한 SDK 호출 하나씩입니다. 결과는 "결과" 아래에 나타납니다.</li>
+        <li><b>키 만들기</b>: 이름은 영문·숫자·<code>_ . -</code>만 됩니다. 만들면 키 표가 새로 고쳐집니다.</li>
+        <li><b>EEK</b>: 고른 키로 generate → decrypt → (롤오버) → re-encrypt를 차례로 실행하고 단계마다 결과를 보여 줍니다.</li>
+    </ul>
+
+    <h3>따라 해 보기</h3>
+    <ol>
+        <li><b>EEK</b>에서 <code>demo-key</code>를 고르고 실행합니다. 결과의 <code>versionName</code>(EEK를 만든 키 버전)을 보세요.</li>
+        <li><b>키 만들기</b>로 <code>sdk_demo_key</code>를 만들고, 표에서 <b>rollover</b>를 누르면 버전 수가 2가 됩니다.</li>
+        <li>EEK에서 <code>sdk_demo_key</code>와 "롤오버"를 켜고 실행하면, re-encrypt 결과의 키 버전이 새 버전으로 바뀝니다.</li>
+        <li><b>delete</b>로 <code>sdk_demo_key</code>를 지웁니다. 지운 뒤 <b>metadata</b>를 다시 부르면 <code>RangerNotFoundException</code>입니다.</li>
+    </ol>
+    <div class="warn">시드 키 <code>demo-key</code>는 지우지 마세요. 키를 지우면 그 키로 암호화된 데이터는 영영 복호화할 수 없습니다.</div>
+
+    <h3>이 화면이 쓰는 API</h3>
+    <pre class="code" data-lang="java">List&lt;String&gt; names = kms.names();
+List&lt;KeyMetadata&gt; meta = kms.metadata(names);
+
+kms.createKey("sdk_demo_key", "AES/CTR/NoPadding", 128, "demo", Map.of("owner", "demo"));
+KeyVersion v1 = kms.rolloverKey("sdk_demo_key");
+List&lt;KeyVersion&gt; versions = kms.versions("sdk_demo_key");
+
+List&lt;EncryptedKeyVersion&gt; eeks = kms.generateEek("demo-key", 1);
+KeyVersion dek = kms.decryptEek("demo-key", eeks.get(0));
+EncryptedKeyVersion moved = kms.reencryptEek("demo-key", eeks.get(0));
+
+kms.deleteKey("sdk_demo_key");</pre>
+    <p>KMS가 "키가 없다"를 500 오류로 알려 줘도 SDK는 <code>RangerNotFoundException</code>으로 바꿔 줍니다.</p>
+</aside>
+</body>
+</html>

@@ -2,6 +2,7 @@ package io.datadynamics.ranger.client.admin;
 
 import com.fasterxml.jackson.databind.JavaType;
 import io.datadynamics.ranger.client.core.Capabilities;
+import io.datadynamics.ranger.client.core.RangerException;
 import io.datadynamics.ranger.client.core.RangerNotFoundException;
 import io.datadynamics.ranger.client.core.http.HttpCall;
 import io.datadynamics.ranger.client.core.http.HttpResult;
@@ -73,6 +74,13 @@ abstract class Resource {
         } catch (RangerNotFoundException e) {
             return Optional.empty();
         }
+    }
+
+    /** Re-raise a 400 that Ranger uses for "no such object" as {@link RangerNotFoundException}. */
+    static RangerNotFoundException notFound(RangerException e) {
+        String msg = e.getServerMessage();
+        return new RangerNotFoundException("Not found: " + (msg != null ? msg : e.getMethod() + " " + e.getPath()), new RangerException.ErrorContext(e.getStatus(), e.getMethod(),
+                e.getPath(), e.getServer(), e.getRequestId(), e.getBody(), msg), e);
     }
 
     static HttpCall paged(HttpCall call, Integer start, Integer size) {

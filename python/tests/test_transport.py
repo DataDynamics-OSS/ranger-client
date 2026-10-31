@@ -1,3 +1,4 @@
+import json
 import logging
 
 import httpx
@@ -175,3 +176,30 @@ def test_request_id_is_stable_across_retries():
         RangerAdmin(ADMIN, retry=FAST).policies.get(1)
         ids = {c.request.headers["x-request-id"] for c in route.calls}
         assert len(ids) == 1
+
+
+def test_interceptors_see_request_and_response_bodies():
+    events = []
+
+    class Bodies:
+        def begin(self, server, method, url, attempt, request_id, set_header):
+            class A:
+                def on_request_body(self, content_type, body):
+                    events.append(("request", content_type, body))
+
+                def on_response_body(self, status, body):
+                    events.append(("response", status, body))
+
+                def on_response(self, status):
+                    events.append(("status", status))
+
+                def on_error(self, error):
+                    events.append(("error",))
+            return A()
+
+    with respx.mock() as mock:
+        mock.route(host="ranger1").mock(return_value=httpx.Response(200, json={"id": 1, "name": "s"}))
+        RangerAdmin(ADMIN, interceptors=[Bodies()]).services.create({"name": "s", "type": "hive"})
+    assert events[0][:2] == ("request", "application/json") and json.loads(events[0][2]) == {"name": "s", "type": "hive"}
+    assert events[1][:2] == ("response", 200) and json.loads(events[1][2]) == {"id": 1, "name": "s"}
+    assert events[2] == ("status", 200)

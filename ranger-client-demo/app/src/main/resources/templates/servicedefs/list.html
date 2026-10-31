@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ko">
+<head th:replace="~{fragments :: head('서비스 정의')}"></head>
+<body>
+<header th:replace="~{fragments :: nav('servicedefs')}"></header>
+<div class="layout">
+<main>
+    <h1>서비스 정의</h1>
+    <p class="lead">서비스 정의(service def)는 Ranger 플러그인 종류마다의 스키마입니다. 서비스와 정책이 써야 하는 리소스 계층,
+        권한(access type), 마스킹 종류를 정합니다. <code>stream()</code>은 페이지를 알아서 넘기며 모두 읽습니다.</p>
+    <div th:replace="~{fragments/call :: panel(${list})}"></div>
+    <section class="panel">
+        <table>
+            <thead><tr><th>id</th><th>이름</th><th>레이블</th><th>리소스</th><th>권한</th><th>마스킹</th><th>행 필터</th></tr></thead>
+            <tbody>
+            <tr th:each="d : ${defs}">
+                <td th:text="${d.getId()}"></td>
+                <td><a th:href="@{/servicedefs/{n}(n=${d.getName()})}" th:text="${d.getName()}"></a></td>
+                <td th:text="${d.getLabel()}"></td>
+                <td th:text="${#lists.size(d.getResources())}"></td>
+                <td th:text="${#lists.size(d.getAccessTypes())}"></td>
+                <td th:text="${d.getDataMaskDef() != null and !#maps.isEmpty(d.getDataMaskDef())} ? '예' : ''"></td>
+                <td th:text="${d.getRowFilterDef() != null and !#maps.isEmpty(d.getRowFilterDef())} ? '예' : ''"></td>
+            </tr>
+            </tbody>
+        </table>
+    </section>
+    <section th:replace="~{fragments :: trace}"></section>
+</main>
+<aside class="help" th:replace="~{help/servicedefs-list :: help}"></aside>
+</div>
+</body>
+</html>

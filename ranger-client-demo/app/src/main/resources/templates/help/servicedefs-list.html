@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ko">
+<body>
+<aside class="help" th:fragment="help">
+    <div th:replace="~{fragments :: helpTitle('서비스 정의', 'Ranger가 아는 플러그인 종류(hive, hdfs, kafka …)마다의 스키마입니다.')}"></div>
+
+    <h3>서비스 정의란?</h3>
+    <p>Ranger는 여러 시스템(Hive, HDFS, Kafka, Trino …)의 권한을 한곳에서 관리합니다. 시스템마다 리소스와 권한이 다르므로,
+        그 모양을 정한 것이 <span class="term">서비스 정의(service def)</span>입니다.</p>
+    <pre class="diagram">서비스 정의 hive          (스키마)
+ └─ 서비스 demo_hive      (실제 Hive 클러스터 하나)
+     └─ 정책 sales_read   (그 클러스터의 권한 규칙)</pre>
+    <p>예를 들어 <code>hive</code> 정의는 "리소스는 database → table → column 계층이고, 권한은 select, update, create …"라고 정합니다.
+        정책에 이 정의에 없는 리소스나 권한을 쓰면 Ranger가 거부합니다.</p>
+
+    <h3>표의 열</h3>
+    <table>
+        <thead><tr><th>열</th><th>뜻</th></tr></thead>
+        <tbody>
+        <tr><td><b>리소스</b></td><td>리소스 종류 수(database, table, column, udf, url …)</td></tr>
+        <tr><td><b>권한</b></td><td>access type 수(select, update, …)</td></tr>
+        <tr><td><b>마스킹 / 행 필터</b></td><td>마스킹·행 필터 정책을 지원하는지</td></tr>
+        </tbody>
+    </table>
+
+    <h3>이 화면 사용법</h3>
+    <ul>
+        <li>이름을 누르면 리소스 계층, 권한, 마스킹 종류를 자세히 봅니다.</li>
+        <li>정의는 Ranger에 기본으로 들어 있습니다. 데모에서는 읽기만 합니다.</li>
+    </ul>
+    <div class="tip">목록 하나를 읽는 데도 요청이 여러 번일 수 있습니다. <code>stream()</code>이 페이지 크기만큼씩 끝까지 넘기기 때문입니다.
+        화면 아래 요청 기록에서 <code>startIndex</code>가 바뀌는 것을 확인하세요.</div>
+
+    <h3>이 화면이 쓰는 API</h3>
+    <pre class="code" data-lang="java">List&lt;RangerServiceDef&gt; defs = admin.serviceDefs().stream().toList();
+Optional&lt;RangerServiceDef&gt; hive = admin.serviceDefs().find("hive");
+RangerServiceDef def = admin.serviceDefs().getByName("hive");   // 없으면 RangerNotFoundException</pre>
+</aside>
+</body>
+</html>

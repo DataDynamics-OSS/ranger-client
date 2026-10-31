@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ko">
+<body>
+<aside class="help" th:fragment="help">
+    <div th:replace="~{fragments :: helpTitle('정책 상세', '정책 하나를 읽고, JSON으로 고쳐 여러 쓰기 메서드로 저장해 봅니다.')}"></div>
+
+    <h3>모델과 알 수 없는 필드</h3>
+    <p><code>RangerPolicy</code>는 불변 모델입니다. 고칠 때는 <code>toBuilder()</code>로 복사본을 만듭니다.
+        Ranger 버전마다 정책 JSON에 필드가 더 있을 수 있는데, SDK는 모르는 필드도 보관했다가 저장할 때 그대로 돌려보냅니다.
+        그래서 오래된 SDK로 새 Ranger의 정책을 고쳐도 필드가 사라지지 않습니다.</p>
+
+    <h3>쓰기 메서드 비교</h3>
+    <table>
+        <thead><tr><th>버튼</th><th>하는 일</th></tr></thead>
+        <tbody>
+        <tr><td><b>update (버전 확인)</b></td><td>저장 전에 서버의 현재 <code>version</code>과 비교합니다. 다르면 <code>RangerConflictException</code>.</td></tr>
+        <tr><td><b>update (확인 안 함)</b></td><td>나중에 쓴 쪽이 이깁니다(last write wins).</td></tr>
+        <tr><td><b>apply</b></td><td>(서비스, 이름)으로 찾아 있으면 고치고 없으면 만듭니다.</td></tr>
+        <tr><td><b>serverApply</b></td><td>Ranger의 <code>/policy/apply</code>. 같은 리소스의 정책에 항목을 합칩니다.</td></tr>
+        <tr><td><b>create</b></td><td>id·guid·version을 지우고 새 정책으로 만듭니다. 이름을 바꾸지 않으면 409.</td></tr>
+        </tbody>
+    </table>
+
+    <h3>따라 해 보기: 동시 수정 감지</h3>
+    <ol>
+        <li>설명(<code>description</code>)을 고치고 <b>update (버전 확인)</b>를 누릅니다. 성공합니다.</li>
+        <li>새로 고치지 않고 다시 고쳐 같은 버튼을 누릅니다. 편집기의 <code>version</code>이 낡았으므로 실패합니다.</li>
+        <li>실패 상자에서 예외 타입 <code>RangerConflictException</code>과 HTTP 409를 확인하세요.</li>
+    </ol>
+    <div class="tip">화면 아래 요청 기록을 펼치면 update가 <code>GET</code>(현재 버전 확인) 뒤에 <code>PUT</code>을 보내는 것을 볼 수 있습니다.</div>
+
+    <h3>이 화면이 쓰는 API</h3>
+    <pre class="code" data-lang="java">RangerPolicy p = admin.policies().get(12L);
+RangerPolicy changed = p.toBuilder().description("new").build();
+admin.policies().update(changed);          // 버전 확인 (= update(changed, true))
+admin.policies().update(changed, false);   // 확인 안 함
+admin.policies().delete(12L);</pre>
+</aside>
+</body>
+</html>

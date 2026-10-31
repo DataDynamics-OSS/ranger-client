@@ -64,6 +64,14 @@ def _coerce(model: Type[M], obj: Union[M, Dict[str, Any]]) -> M:
     return obj if isinstance(obj, model) else model.model_validate(obj)
 
 
+def _not_found(exc: RangerValidationException) -> RangerNotFoundException:
+    """Re-raise a 400 that Ranger uses for "no such object" as :class:`RangerNotFoundException`."""
+    return RangerNotFoundException(
+        f"Not found: {exc.server_message or f'{exc.method} {exc.path}'}", status=exc.status, method=exc.method, path=exc.path,
+        server=exc.server, request_id=exc.request_id, body=exc.body, server_message=exc.server_message,
+    )
+
+
 def _paging(start_index: Optional[int], page_size: Optional[int]) -> Dict[str, Any]:
     out: Dict[str, Any] = {}
     if start_index is not None:
@@ -367,7 +375,9 @@ class Policies(_Sub):
         """Ranger's bulk export (``exportJson``): ``{"metaDataInfo": ..., "policies": [...]}``."""
         params = {"serviceName": ",".join(services) if services else None, "zoneName": zone,
                   "checkPoliciesExists": False}
-        data = yield Request("GET", f"{PLUGINS}/policies/exportJson", params=params)
+        # Ranger answers this endpoint with Content-Type text/json and 406 to "Accept: application/json" alone.
+        data = yield Request("GET", f"{PLUGINS}/policies/exportJson", params=params,
+                             headers={"Accept": "application/json, text/json"})
         if isinstance(data, str):
             data = json.loads(data) if data else {}
         return data or {"policies": []}
@@ -399,13 +409,15 @@ class Roles(_Sub):
         try:
             return (yield from call(Request("GET", f"{API}/roles/name/{seg(name)}"), _one(Role)))
         except RangerValidationException as exc:
-            # Ranger 2.x answers an unknown role name with 400 "Role with name: x does not exist".
-            if "does not exist" not in (exc.server_message or ""):
-                raise
-            raise RangerNotFoundException(
-                f"Not found: {exc.server_message}", status=exc.status, method=exc.method, path=exc.path,
-                server=exc.server, request_id=exc.request_id, body=exc.body, server_message=exc.server_message,
-            ) from exc
+            # Ranger 2.x answers an unknown role name with 400: "Role with name: x does not exist", or (2.9)
+            # "User doesn't have permissions to get details for x". The latter is also a genuine permission
+            # error, so it means "not found" only when the role is absent from the role names.
+            msg = exc.server_message or ""
+            if "does not exist" in msg:
+                raise _not_found(exc) from exc
+            if "have permissions to get details for" in msg and name not in (yield from Roles.names.flow(self)):
+                raise _not_found(exc) from exc
+            raise
 
     @flow
     def find(self, name: str) -> Flow[Optional[Role]]:
@@ -458,7 +470,13 @@ class Roles(_Sub):
 
     @flow
     def delete_by_name(self, name: str, exec_user: Optional[str] = None, service: Optional[str] = None) -> Flow[None]:
-        yield Request("DELETE", f"{API}/roles/name/{seg(name)}", params={"execUser": exec_user, "serviceName": service})
+        try:
+            yield Request("DELETE", f"{API}/roles/name/{seg(name)}", params={"execUser": exec_user, "serviceName": service})
+        except RangerValidationException as exc:
+            # Ranger 2.9: 400 "Validation failure: error code[4007], reason[No RangerRole found for name[x]]"
+            if "No RangerRole found" in (exc.server_message or ""):
+                raise _not_found(exc) from exc
+            raise
 
     @flow
     def grant(self, service: str, request: Union[GrantRevokeRoleRequest, Dict[str, Any]]) -> Flow[Any]:
@@ -483,7 +501,21 @@ class Zones(_Sub):
     @flow
     def get_by_name(self, name: str) -> Flow[SecurityZone]:
         yield from self._caps.require(Feature.ZONES_V2)
-        return (yield from call(Request("GET", f"{API}/zones-v2/name/{seg(name)}"), _one(SecurityZone)))
+        try:
+            return (yield from call(Request("GET", f"{API}/zones-v2/name/{seg(name)}"), _one(SecurityZone)))
+        except RangerValidationException as exc:
+            # Ranger 2.x answers an unknown zone name with 400 "security-zone with name: x does not exist".
+            if "does not exist" not in (exc.server_message or ""):
+                raise
+            raise _not_found(exc) from exc
+
+    @flow
+    def find(self, name: str) -> Flow[Optional[SecurityZone]]:
+        """Like :meth:`get_by_name` but returns ``None`` when the zone does not exist."""
+        try:
+            return (yield from Zones.get_by_name.flow(self, name))
+        except RangerNotFoundException:
+            return None
 
     @flow
     def search(self, name: Optional[str] = None, start_index: Optional[int] = None,
@@ -549,6 +581,14 @@ class Users(_Sub):
         return (yield from call(Request("GET", f"{XUSERS}/users/userName/{seg(name)}"), _one(User)))
 
     @flow
+    def find(self, name: str) -> Flow[Optional[User]]:
+        """Like :meth:`get_by_name` but returns ``None`` when the user does not exist."""
+        try:
+            return (yield from Users.get_by_name.flow(self, name))
+        except RangerNotFoundException:
+            return None
+
+    @flow
     def search(self, name: Optional[str] = None, start_index: Optional[int] = None,
                page_size: Optional[int] = None, **filters: Any) -> Flow[List[User]]:
         params = {"name": name, **filters, **_paging(start_index, page_size)}
@@ -590,6 +630,14 @@ class Groups(_Sub):
     @flow
     def get_by_name(self, name: str) -> Flow[Group]:
         return (yield from call(Request("GET", f"{XUSERS}/groups/groupName/{seg(name)}"), _one(Group)))
+
+    @flow
+    def find(self, name: str) -> Flow[Optional[Group]]:
+        """Like :meth:`get_by_name` but returns ``None`` when the group does not exist."""
+        try:
+            return (yield from Groups.get_by_name.flow(self, name))
+        except RangerNotFoundException:
+            return None
 
     @flow
     def search(self, name: Optional[str] = None, start_index: Optional[int] = None,
@@ -640,6 +688,17 @@ class Groups(_Sub):
 # --------------------------------------------------------------------------- tags
 
 
+def _by_id(req: Request, parse: Any = None) -> Flow[Any]:
+    """Ranger's tag REST answers an unknown id with a bare ``400 {"statusCode":400}``; real failures (e.g. a tag
+    still mapped to a resource) carry a message. So a 400 without a message on a by-id call means "not found"."""
+    try:
+        return (yield from call(req, parse))
+    except RangerValidationException as exc:
+        if not exc.server_message:
+            raise _not_found(exc) from exc
+        raise
+
+
 class Tags(_Sub):
     @flow
     def types(self) -> Flow[List[str]]:
@@ -652,7 +711,7 @@ class Tags(_Sub):
 
     @flow
     def get_def(self, id: int) -> Flow[TagDef]:
-        return (yield from call(Request("GET", f"{TAGS}/tagdef/{int(id)}"), _one(TagDef)))
+        return (yield from _by_id(Request("GET", f"{TAGS}/tagdef/{int(id)}"), _one(TagDef)))
 
     @flow
     def get_def_by_name(self, name: str) -> Flow[TagDef]:
@@ -671,7 +730,7 @@ class Tags(_Sub):
 
     @flow
     def delete_def(self, id: int) -> Flow[None]:
-        yield Request("DELETE", f"{TAGS}/tagdef/{int(id)}")
+        yield from _by_id(Request("DELETE", f"{TAGS}/tagdef/{int(id)}"))
 
     # tags
     @flow
@@ -684,7 +743,7 @@ class Tags(_Sub):
 
     @flow
     def get(self, id: int) -> Flow[Tag]:
-        return (yield from call(Request("GET", f"{TAGS}/tag/{int(id)}"), _one(Tag)))
+        return (yield from _by_id(Request("GET", f"{TAGS}/tag/{int(id)}"), _one(Tag)))
 
     @flow
     def create(self, tag: Union[Tag, Dict[str, Any]], update_if_exists: bool = False) -> Flow[Tag]:
@@ -699,7 +758,7 @@ class Tags(_Sub):
 
     @flow
     def delete(self, id: int) -> Flow[None]:
-        yield Request("DELETE", f"{TAGS}/tag/{int(id)}")
+        yield from _by_id(Request("DELETE", f"{TAGS}/tag/{int(id)}"))
 
     # service resources
     @flow
@@ -709,7 +768,7 @@ class Tags(_Sub):
 
     @flow
     def get_resource(self, id: int) -> Flow[ServiceResource]:
-        return (yield from call(Request("GET", f"{TAGS}/resource/{int(id)}"), _one(ServiceResource)))
+        return (yield from _by_id(Request("GET", f"{TAGS}/resource/{int(id)}"), _one(ServiceResource)))
 
     @flow
     def create_resource(self, resource: Union[ServiceResource, Dict[str, Any]],
@@ -725,7 +784,7 @@ class Tags(_Sub):
 
     @flow
     def delete_resource(self, id: int) -> Flow[None]:
-        yield Request("DELETE", f"{TAGS}/resource/{int(id)}")
+        yield from _by_id(Request("DELETE", f"{TAGS}/resource/{int(id)}"))
 
     # tag <-> resource mapping
     @flow

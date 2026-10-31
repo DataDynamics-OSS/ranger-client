@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ko">
+<body>
+<aside class="help" th:fragment="help">
+    <div th:replace="~{fragments :: helpTitle('역할', '사용자·그룹·역할을 묶어 정책에서 한 이름으로 쓰게 하는 Ranger 역할입니다.')}"></div>
+
+    <h3>역할이란?</h3>
+    <p><span class="term">역할(role)</span>은 구성원 목록에 이름을 붙인 것입니다. 정책에 사용자를 하나하나 적는 대신 역할을 적으면,
+        구성원이 바뀌어도 정책은 그대로 둘 수 있습니다. 그룹과 달리 역할은 Ranger 안에서만 관리되고, 다른 역할을 구성원으로 가질 수 있습니다.</p>
+    <pre class="diagram">역할 analysts
+ ├─ 사용자  alice
+ └─ 그룹    analyst  (→ 그룹에 속한 사용자 모두)
+
+정책 sales_read 허용: role analysts → select</pre>
+
+    <h3>역할 관리자 (★)</h3>
+    <p>구성원 중 <b>isAdmin</b>이 켜진 사람은 그 역할의 구성원을 바꿀 수 있습니다(grant/revoke). 표에서 ★로 표시합니다.</p>
+
+    <h3>apply와 grant/revoke</h3>
+    <table>
+        <thead><tr><th>방법</th><th>무엇을 하나</th></tr></thead>
+        <tbody>
+        <tr><td><code>apply</code></td><td>역할 전체를 이 값으로 만듭니다(관리 도구, Policy as Code 방식).</td></tr>
+        <tr><td><code>grant</code> / <code>revoke</code></td><td>구성원을 더하거나 뺍니다. Hive의 <code>GRANT ROLE</code> SQL처럼 플러그인이 보내는 방식이며, grantor의 권한을 확인합니다.</td></tr>
+        </tbody>
+    </table>
+
+    <h3>따라 해 보기</h3>
+    <ol>
+        <li><b>forUser</b>를 <code>alice</code>로 눌러 보세요. 시드 역할 <code>analysts</code>가 나옵니다.</li>
+        <li><b>grant</b>로 <code>bob</code>을 <code>analysts</code>에 넣고, 다시 <code>bob</code>으로 forUser를 해 봅니다.</li>
+        <li><b>revoke</b>로 되돌립니다.</li>
+        <li><b>apply</b>로 <code>sdk_demo_auditors</code>를 만들고, <b>deleteByName</b>으로 지웁니다.</li>
+    </ol>
+    <div class="warn"><code>analysts</code>는 시드 정책이 쓰는 역할입니다. 구성원을 바꾸면 <a th:href="@{/pdp}">PDP 권한 확인</a> 결과도 바뀝니다.</div>
+
+    <h3>이 화면이 쓰는 API</h3>
+    <pre class="code" data-lang="java">List&lt;RangerRole&gt; roles = admin.roles().search("demo", 0, 200);
+
+admin.roles().apply(RangerRole.builder().name("sdk_demo_auditors")
+        .users(List.of(RoleMember.of("bob"), RoleMember.admin("admin")))
+        .groups(List.of(RoleMember.of("engineer")))
+        .build());
+
+admin.roles().grant("demo_hive", GrantRevokeRoleRequest.builder()
+        .grantor("admin").targetRoles(List.of("analysts"))
+        .users(List.of("bob")).build());
+
+List&lt;String&gt; mine = admin.roles().forUser("alice");
+List&lt;String&gt; all = admin.roles().names();
+admin.roles().deleteByName("sdk_demo_auditors", null, null);</pre>
+</aside>
+</body>
+</html>

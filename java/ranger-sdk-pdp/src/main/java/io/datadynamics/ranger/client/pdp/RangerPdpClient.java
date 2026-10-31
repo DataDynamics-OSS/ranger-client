@@ -19,6 +19,8 @@ import io.datadynamics.ranger.client.model.ResourcePermissions;
 import io.datadynamics.ranger.client.model.ResourcePermissionsRequest;
 import io.datadynamics.ranger.client.model.UserInfo;
 
+import com.fasterxml.jackson.databind.JsonNode;
+
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -124,14 +126,20 @@ public final class RangerPdpClient extends AbstractRangerClient<RangerPdpClient>
     }
 
     private <T> T post(String path, RangerModel body, Class<T> type) {
-        String key = cache == null ? null : DecisionCache.key(path, RangerJson.tree(body));
+        JsonNode tree = RangerJson.tree(body);
+        String key = cache == null ? null : DecisionCache.key(path, tree);
         if (key != null) {
             Object hit = cache.get(key);
             if (hit != null) {
                 return type.cast(hit);
             }
         }
-        T result = transport.send(HttpCall.post(path).json(body).idempotent(true)).as(type);
+        HttpCall call = HttpCall.post(path).json(body).idempotent(true);
+        String requestId = tree.path("requestId").asText(null);
+        if (requestId != null) {
+            call.header(Transport.REQUEST_ID_HEADER, requestId); // same id in the header, the body and the result
+        }
+        T result = transport.send(call).as(type);
         if (key != null && result != null) {
             cache.put(key, result);
         }

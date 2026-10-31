@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ko">
+<head th:replace="~{fragments :: head('장애 실험')}"></head>
+<body>
+<header th:replace="~{fragments :: nav('lab')}"></header>
+<div class="layout">
+<main>
+    <h1>장애 실험</h1>
+    <p class="lead">장애 조치(failover), 재시도, 예외 매핑, 낙관적 잠금을 실제 스택에 일부러 일으켜 봅니다. 실험용 클라이언트는 SDK 빌더로
+        따로 만든 것입니다(<code>LabClients</code>). 결과마다 HTTP 시도가 모두 보입니다.</p>
+
+    <div class="grid2">
+        <section class="panel">
+            <h3>① 장애 조치 (failover)</h3>
+            <p class="muted small">이 클라이언트는 <code>urls(<span th:text="${deadUrl}"></span>, <span th:text="${adminUrls[0]}"></span>)</code>로 만들었습니다.
+                노드는 돌아가며 쓰고, 연결에 실패한 노드는 <b>30초 동안 쉬게(cooldown)</b> 한 뒤 같은 호출을 다음 노드로 이어 갑니다.
+                쉬는 동안에는 바로 살아 있는 노드로 가므로, 30초 안에 다시 누르면 시도가 한 번만 보입니다.</p>
+            <div class="actions"><button hx-post="/lab/failover" hx-target="#failover-result" hx-swap="outerHTML">장애 조치 클라이언트로 호출</button></div>
+            <div id="failover-result" th:fragment="failoverResult">
+                <th:block th:if="${call != null}"><div th:replace="~{fragments/call :: panel(${call})}"></div></th:block>
+                <table th:if="${nodes != null}">
+                    <thead><tr><th>노드</th><th>nodeAvailability()</th></tr></thead>
+                    <tr th:each="n : ${nodes}">
+                        <td><code th:text="${n.key}"></code></td>
+                        <td><span class="badge" th:classappend="${n.value} ? 'UP' : 'COOLDOWN'"
+                                  th:text="${n.value} ? '사용 가능' : '쉬는 중 (cooldown)'"></span></td>
+                    </tr>
+                </table>
+                <th:block th:if="${call != null}"><section th:replace="~{fragments :: actionTrace}"></section></th:block>
+            </div>
+        </section>
+
+        <section class="panel">
+            <h3>② 백오프 재시도</h3>
+            <p class="muted small">읽기 시간 제한 1ms(시도마다 시간 초과)와 <code>RetryPolicy.exponential(3, 100 ms)</code>로 만든 클라이언트입니다.
+                멱등 요청(GET/PUT/DELETE, PDP POST)만 지수 백오프와 지터를 두고 재시도합니다. 모든 시도는 <b>같은 <code>X-Request-Id</code></b>를 달고,
+                마지막 오류는 <code>RangerTransportException</code>입니다.</p>
+            <div class="actions"><button hx-post="/lab/timeout" hx-target="#timeout-result">1ms 시간 제한으로 GET</button></div>
+            <div id="timeout-result"></div>
+        </section>
+    </div>
+
+    <section class="panel">
+        <h3>③ 예외 모음</h3>
+        <p class="muted small">SDK는 모든 실패를 하나의 예외 계층으로 바꿉니다(Java와 Python에서 이름이 같습니다). 버튼마다 실패 하나를 일부러 일으킵니다.
+            Ranger 2.x는 "없음"이나 "이미 있음"을 400으로 답하는 경우가 있는데, SDK는 메시지를 보고 알맞은 예외로 바꿉니다.</p>
+        <div class="actions">
+            <button class="secondary" hx-post="/lab/error/404" hx-target="#error-result">404 · 없는 정책</button>
+            <button class="secondary" hx-post="/lab/error/409" hx-target="#error-result">409 · 이미 있는 서비스</button>
+            <button class="secondary" hx-post="/lab/error/400" hx-target="#error-result">400 · 모르는 리소스</button>
+            <button class="secondary" hx-post="/lab/error/401" hx-target="#error-result">401 · 틀린 비밀번호</button>
+            <button class="secondary" hx-post="/lab/error/403-pdp" hx-target="#error-result" th:disabled="${!pdpAvailable}">403 · 위임 사용자가 아닌 PDP 호출</button>
+            <button class="secondary" hx-post="/lab/error/403-kms" hx-target="#error-result" th:disabled="${!kmsAvailable}">403 · mallory로 KMS 호출</button>
+            <button class="secondary" hx-post="/lab/error/unsupported" hx-target="#error-result">Unsupported · 2.x에서 GDS</button>
+            <button class="secondary" hx-post="/lab/error/transport" hx-target="#error-result">Transport · 연결 불가</button>
+        </div>
+        <div id="error-result"></div>
+    </section>
+
+    <section class="panel">
+        <h3>④ 낙관적 잠금</h3>
+        <p class="muted small">정책 <code>sales_read</code>를 두 번 읽어 사본 A, B를 만듭니다. A를 <code>update(policy, true)</code>로 고치면 서버 버전이 올라가고,
+            이제 낡은 B를 같은 방법으로 고치면 A의 변경을 조용히 덮어쓰는 대신 <code>RangerConflictException</code>으로 거절됩니다.
+            Ranger의 PUT은 버전을 비교하지 않으므로 SDK가 정책을 다시 읽어(추가 GET) 비교한 뒤 보냅니다. 마지막에 설명을 원래대로 돌려놓습니다.</p>
+        <div class="actions"><button hx-post="/lab/locking" hx-target="#locking-result">동시 수정 실행</button></div>
+        <div id="locking-result" th:fragment="steps">
+            <th:block th:if="${steps != null}">
+                <th:block th:each="s : ${steps}"><div th:replace="~{fragments/call :: panel(${s})}"></div></th:block>
+                <section th:replace="~{fragments :: actionTrace}"></section>
+            </th:block>
+        </div>
+    </section>
+    <section th:replace="~{fragments :: trace}"></section>
+</main>
+<aside class="help" th:replace="~{help/lab :: help}"></aside>
+</div>
+</body>
+</html>

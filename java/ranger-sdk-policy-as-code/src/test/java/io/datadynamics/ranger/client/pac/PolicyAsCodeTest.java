@@ -42,7 +42,10 @@ class PolicyAsCodeTest {
             assertEquals(Map.of(Change.Action.CREATE, 3, Change.Action.UPDATE, 0, Change.Action.DELETE, 0, Change.Action.NOOP, 0),
                     plan.summary());
             assertTrue(plan.render().contains("+ policy cm_hive/sales_read"), plan.render());
-            assertEquals(3, pac.apply(plan).size());
+            List<Change> applied = pac.apply(plan);
+            assertEquals(3, applied.size());
+            // roles first: Ranger rejects a policy naming a role that does not exist yet
+            assertEquals(Change.Kind.ROLE, applied.get(0).kind());
             assertEquals(List.of("sales_read", "tmp"), fake.names());
             assertTrue(pac.plan(specs).isEmpty());
 

@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ko">
+<head th:replace="~{fragments :: head('대시보드')}"></head>
+<body>
+<header th:replace="~{fragments :: nav('dashboard')}"></header>
+<div class="layout">
+<main>
+    <h1>대시보드</h1>
+    <p class="lead"><code>ranger-sdk-spring-boot-starter</code>가 <code>ranger.*</code> 설정으로 만든 클라이언트 빈 세 개의 연결 상태와,
+        Admin 서버가 지원하는 기능입니다. 아래 값은 모두 화면을 열 때 실제로 조회한 것이고, 각 값 뒤의 SDK 호출을 볼 수 있습니다.</p>
+
+    <section class="panel">
+        <h3>연결</h3>
+        <table>
+            <thead><tr><th>서버</th><th>빈</th><th>URL (노드 사용 가능 여부)</th><th>인증</th><th>확인</th></tr></thead>
+            <tbody>
+            <tr th:each="s : ${servers}">
+                <td><strong th:text="${s.name()}"></strong></td>
+                <td><code th:text="${s.bean()}"></code></td>
+                <td>
+                    <div th:each="u : ${s.urls()}">
+                        <code th:text="${u}"></code>
+                        <span class="badge" th:with="up=${s.nodes().get(u)}"
+                              th:classappend="${up == null or up} ? 'UP' : 'COOLDOWN'"
+                              th:text="${up == null or up} ? '사용 가능' : '쿨다운'"></span>
+                    </div>
+                </td>
+                <td><code th:text="${s.auth()}"></code></td>
+                <td><span class="badge" th:classappend="${s.probe().ok()} ? 'UP' : 'DOWN'"
+                          th:text="${s.probe().ok()} ? 'UP' : ${s.probe().errorType()}"></span></td>
+            </tr>
+            </tbody>
+        </table>
+        <details>
+            <summary>확인에 쓴 SDK 호출</summary>
+            <th:block th:each="s : ${servers}"><div th:replace="~{fragments/call :: panel(${s.probe()})}"></div></th:block>
+        </details>
+    </section>
+
+    <div class="grid2">
+        <section class="panel">
+            <h3>기능 감지</h3>
+            <p class="muted small">SDK는 기능마다 한 번만 확인하거나(<code>ranger.admin.server-version</code>을 설정하면 그 값을 씀),
+                서버에 없는 API를 부르기 전에 <code>UnsupportedFeatureException</code>을 던집니다.</p>
+            <p>서버 버전: <strong th:text="${version.ok()} ? (${version.result()} ?: '알 수 없음 (확인으로 판단)') : ${version.errorType()}"></strong></p>
+            <table>
+                <thead><tr><th>기능</th><th>최소 버전</th><th>지원</th></tr></thead>
+                <tbody>
+                <tr th:each="f : ${features}">
+                    <td><code th:text="${f.feature()}"></code></td>
+                    <td th:text="${f.minVersion()}"></td>
+                    <td><span class="badge" th:classappend="${f.supported()}"
+                              th:text="${f.supported() != null} ? ${f.supported()} : ${f.call().errorType()}"></span></td>
+                </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section class="panel">
+            <h3>데모 데이터</h3>
+            <p class="muted small">시작할 때 SDK로 넣은 데이터입니다: 사용자, 그룹, <code>demo_hive</code> 서비스, Policy as Code로 넣은 정책,
+                보안 영역, 태그, KMS 키. 모든 단계가 upsert이므로 다시 실행해도 안전합니다.</p>
+            <p>
+                상태: <span class="badge" th:text="${seeder.state()}"
+                              th:classappend="${seeder.state().name() == 'DONE'} ? 'ok' : (${seeder.state().name() == 'FAILED'} ? 'err' : 'warn')"></span>
+                <span th:if="${seeder.finishedAt() != null}" class="small muted" th:text="'완료 ' + ${seeder.finishedAt()}"></span>
+            </p>
+            <p th:if="${seeder.message() != null}" class="small" th:text="${seeder.message()}"></p>
+            <form method="post" th:action="@{/seed}">
+                <button type="submit" th:disabled="${seeder.isRunning()}">시드 다시 실행</button>
+            </form>
+            <table>
+                <tr th:each="st : ${seeder.steps()}">
+                    <td><span class="badge" th:classappend="${st.call().ok()} ? 'ok' : 'err'" th:text="${st.call().ok()} ? '성공' : '실패'"></span></td>
+                    <td th:text="${st.title()}"></td>
+                    <td class="small muted" th:text="${st.call().ok()} ? '' : ${st.call().errorMessage()}"></td>
+                </tr>
+            </table>
+        </section>
+    </div>
+    <section th:replace="~{fragments :: trace}"></section>
+</main>
+<aside class="help" th:replace="~{help/dashboard :: help}"></aside>
+</div>
+</body>
+</html>

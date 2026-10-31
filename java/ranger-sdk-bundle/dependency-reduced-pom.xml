@@ -3,7 +3,7 @@
   <parent>
     <artifactId>ranger-sdk-parent</artifactId>
     <groupId>io.datadynamics.ranger.client</groupId>
-    <version>0.1.0</version>
+    <version>0.2.0</version>
   </parent>
   <modelVersion>4.0.0</modelVersion>
   <artifactId>ranger-sdk-bundle</artifactId>
@@ -11,6 +11,12 @@
   <description>All SDK modules and dependencies in one shaded jar for offline installs</description>
   <build>
     <plugins>
+      <plugin>
+        <artifactId>maven-jar-plugin</artifactId>
+        <configuration>
+          <forceCreation>true</forceCreation>
+        </configuration>
+      </plugin>
       <plugin>
         <artifactId>maven-shade-plugin</artifactId>
         <version>3.6.0</version>
